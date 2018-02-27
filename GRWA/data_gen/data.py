@@ -1,5 +1,6 @@
 """
-网络可达性测试的数据生成文件。主要生成判断网络可达性的相关数据集。
+RWA光网络的数据生成文件。主要生成给出路由选择的相关数据集。
+数据以np.ndarray的形式存储，格式是CHW，其中C=40
 """
 import networkx as nx
 from graphviz import Graph
@@ -7,6 +8,7 @@ import random
 import time
 import os
 import numpy as np
+import cv2
 
 
 def gen_net_ba(node_num, m):
@@ -96,7 +98,7 @@ def gen_img(graph: Graph, node_num, rm_ratio: float = 0.2,
     label = get_label(src, dst, graph)
     # 构造graphviz对象
     name = str(time.time())
-    g = Graph(format='jpeg', engine='neato')
+    g = Graph(format='png', engine='neato')
     g.attr('node', shape='circle')
     g.attr('edge')
     for node in graph.nodes():
@@ -110,7 +112,7 @@ def gen_img(graph: Graph, node_num, rm_ratio: float = 0.2,
     g.render(filename=name, directory=root_folder, view=False, cleanup=True)
     # 存储到文件中去
     file = open(os.path.join(source_folder, source_file), 'a')
-    file.write(name + '.jpeg ' + str(label) + '\n')
+    file.write(name + '.png ' + str(label) + '\n')
     file.flush()
     file.close()
 
@@ -121,8 +123,8 @@ def data_gen_val():
     :return:
     """
     for node_num in range(10, 30):
-        for index in range(20):
-            for ratio in np.arange(0, 1, 0.05):
+        for index in range(1):
+            for ratio in np.arange(0, 1, 0.5):
                 p = 2.5 / node_num
                 net = gen_net_er(node_num, p)
                 gen_img(net, node_num, rm_ratio=ratio, root_folder='val', source_file='val.txt')
@@ -134,7 +136,7 @@ def data_gen_train():
     :return:
     """
     for node_num in range(10, 30):
-        for index in range(200):
+        for index in range(1):
             for ratio in np.arange(0, 1, 0.01):
                 p = 2.5 / node_num
                 net = gen_net_er(node_num, p)
