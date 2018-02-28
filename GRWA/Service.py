@@ -1,4 +1,4 @@
-from .RwaNet import RwaNetwork, k_shortest_paths
+from RwaNet import RwaNetwork, k_shortest_paths
 from gym.spaces.discrete import Discrete
 from gym.spaces.box import Box
 import numpy as np
@@ -6,6 +6,29 @@ import queue
 
 
 modes = ['alg', 'learning']
+
+
+class Service(object):
+    def __init__(self, index: int, src: str, dst: str,
+                 arrival_time: int, leave_time: int):
+        super(Service, self).__init__()
+        self.index = index
+        self.src = src
+        self.dst = dst
+        self.arrival_time = arrival_time
+        self.leave_time = leave_time
+
+    def add_allocation(self, path: list, wave_index: int):
+        self.path = path
+        self.wave_index = wave_index
+
+
+def cmp(x, y):
+    if x[0] < y[0]:
+        return -1
+    if x[0] > y[0]:
+        return 1
+    return 0
 
 
 class RwaGame(object):
@@ -39,6 +62,7 @@ class RwaGame(object):
         self.max_iter = max_iter
         self.k = k
         self.action_space = Discrete(k*wave_num+1)  # 最后一个值表示主动阻塞
+        self.NO_ACTION = k*wave_num
         if mode in modes:
             self.mode = mode
         else:
@@ -73,8 +97,8 @@ class RwaGame(object):
         base_time = 0
         for base_index in range(self.max_iter):
             src, dst = self.gen_src_dst()
-            arrival = np.random.poisson(lam=self.rou) + base_time
-            leave = np.random.poisson(lam=self.miu) + arrival
+            arrival = np.random.poisson(lam=self.rou) + base_time + 1
+            leave = np.random.poisson(lam=self.miu) + arrival + 1
             self.services[base_index] = Service(base_index, src, dst, arrival, leave)
             self.events.append([arrival, base_index, True])
             self.events.append([leave, base_index, False])
@@ -84,14 +108,12 @@ class RwaGame(object):
 
         # 返回第一个业务请求的状态
         src, dst = self.services[0].src, self.services[0].dst
-        observation = self.net.gen_img(self.img_width, self.img_height, src, dst)
+        observation = self.net.gen_img(self.img_width, self.img_height, src, dst, self.mode)
         reward = 1
         done = False
         info = None
         self.time = self.services[0].arrival_time
         return observation, reward, done, info
-
-
 
     def render(self):
         """
@@ -116,9 +138,33 @@ class RwaGame(object):
             else:
                 # 如果选择其他行为，虽然没用，但是还是要惩罚
                 reward = 0
+            self.time += 1  # 时间推进，事件已经指向下一个要处理的下标，暂时不动
+
         elif self.events[self.event_iter][0] == self.time:
             # 如果该时间点恰巧有业务到达或者离去
             # TODO 处理当前时间点的业务，并且将self.event_iter指向下一个要处理的事件
+            if self.events[self.event_iter][2] is False:
+                # 如果该时间点第一个事件是业务离去，则说明处理逻辑出了问题，抛错
+                raise RuntimeError("执行action遇到业务离去事件，该事件应该在action之前被处理！")
+            else:
+                # 如果该时间点第一个事件是业务到达，则按照action选择处理
+                print("process arrival event")
+                reward = self.exec_action(action, self.services[self.events[self.event_iter][1]])
+                self.event_iter += 1
+                while self.events[self.event_iter][0] == self.time:
+                    # 该时间点处理完业务到达以后，后续还有业务离去事件(不可能同一个时间点有多个业务到达)
+                    assert self.events[self.event_iter][2] is False
+                    leave_service = self.services[self.events[self.event_iter][1]]
+                    if hasattr(leave_service, 'path'):  # 如果该业务分配时候成功了
+                        print('process leave event')
+                        self.net.set_wave_state(wave_index=leave_service.wave_index,
+                                                nodes=leave_service.path,
+                                                state=True,
+                                                check=True)
+                    else:  # 如果该业务分配时候失败了
+                        pass
+                    self.event_iter += 1
+                self.time += 1  # 时间推进，事件也推进到下一个要处理的下标
         else:
             # 如果该时间点之前还有没处理完的业务
             raise EnvironmentError("时间推进过程中，有漏掉未处理的事件")
@@ -127,41 +173,79 @@ class RwaGame(object):
         if self.event_iter == len(self.events):
             # 如果已经把事件全部处理完，
             done = True
-            observation = self.net.gen_img(self.img_width, self.img_height, None, None)
+            observation = self.net.gen_img(self.img_width, self.img_height, None, None, self.mode)
             return observation, reward, done, None
 
-        # 第三，开始进行下一状态的处理
-        self.time += 1  # 时间推进一个单位
+        # 第三，开始进行下一状态的处理。之前的处理中，时间和事件都已经推进到下一个单位了
         if self.events[self.event_iter][0] > self.time:
             # 如果该时间点没有到达或者离去的业务，则返回正常拓扑图
-            observation = self.net.gen_img(self.img_width, self.img_height, None, None)
+            observation = self.net.gen_img(self.img_width, self.img_height, None, None, self.mode)
         elif self.events[self.event_iter][0] == self.time:
             # 如果该时间点恰巧有业务到达或者离去
             # TODO 处理当前时间点排在到达业务之前的离去业务，并将self.event_iter指向下一个要处理的事件
+            while self.events[self.event_iter][2] is False and self.events[self.event_iter][0] == self.time:
+                leave_service = self.services[self.events[self.event_iter][1]]
+                if hasattr(leave_service, 'path'):  # 如果该业务分配时候成功了
+                    print('process leave event')
+                    self.net.set_wave_state(wave_index=leave_service.wave_index,
+                                            nodes=leave_service.path,
+                                            state=True,
+                                            check=True)
+                else:  # 如果该业务分配时候失败了
+                    pass
+                self.event_iter += 1
+                if self.event_iter == len(self.events):
+                    # 如果已经把事件全部处理完，
+                    done = True
+                    observation = self.net.gen_img(self.img_width, self.img_height, None, None, self.mode)
+                    return observation, reward, done, None
+
+            if self.events[self.event_iter][0] == self.time:
+                # 这时候只能是到达业务了，到达业务不可能是最后一个事件。
+                assert self.events[self.event_iter][2] is True
+                service = self.services[self.events[self.event_iter][1]]
+                src, dst = service.src, service.dst
+                observation = self.net.gen_img(self.img_width, self.img_height, src, dst, self.mode)
+            else:
+                # 表示下一个时间点没有到达业务事件
+                observation = self.net.gen_img(self.img_width, self.img_height, None, None, self.mode)
         else:
             # 如果该时间点之前还有没处理完的业务
             raise EnvironmentError("时间推进过程中，还有漏掉未处理的事件")
 
         return observation, reward, done, None
 
-class Service(object):
-    def __init__(self, index: int, src: str, dst: str,
-                 arrival_time: int, leave_time: int):
-        super(Service, self).__init__()
-        self.index = index
-        self.src = src
-        self.dst = dst
-        self.arrival_time = arrival_time
-        self.leave_time = leave_time
+    def exec_action(self, action: int, service: Service) -> float:
+        """
+        对到达的业务service，执行行为action，并且返回reward。
+        如果分配业务成功，则注意给service对象加入分配方案
+        :param action:
+        :param service:
+        :return: reward
+        """
+        path_list = k_shortest_paths(self.net, service.src, service.dst, k=self.k, weight=self.weight)
+        is_avai, _, _ = self.net.exist_rw_allocation(path_list)
+        if action == self.NO_ACTION:
+            if is_avai:
+                # 如果存在可分配的方案，但是选择了NO-ACTION
+                return -1
+            else:
+                # 如果不存在可分配的方案，选择了NO-ACTION
+                return 1
+        else:
+            if is_avai:
+                route_index = action // (self.k*self.wave_num)
+                wave_index = action % (self.k*self.wave_num)
+                if self.net.is_allocable(path_list[route_index], wave_index):
+                    # 如果存在可分配方案，并且指定的分配方案是可行的
+                    self.net.set_wave_state(wave_index=wave_index, nodes=path_list[route_index],
+                                            state=False, check=True)
+                    service.add_allocation(path_list[route_index], wave_index)
+                    return 1
+                else:
+                    # 如果存在可分配方案，并且指定的分配方案是不可行的
+                    return -1
+            else:
+                # 如果不存在可分配的方案，但是选择了非NO-ACTION的选项
+                return 0
 
-    def add_allocation(self, path:list, wave_index: int):
-        self.path = path
-        self.wave_index = wave_index
-
-
-def cmp(x, y):
-    if x[0] < y[0]:
-        return -1
-    if x[0] > y[0]:
-        return 1
-    return 0
