@@ -92,7 +92,9 @@ class SubprocEnv(object):
         """
         for remote, sd in zip(self.remotes, src_dst):
             remote.send(('k_shortest_paths', sd))
-        return np.stack([remote.recv() for remote in self.remotes])
+        result = [remote.recv() for remote in self.remotes]
+        print(result)
+        return result
 
     def close(self):
         if self.closed:

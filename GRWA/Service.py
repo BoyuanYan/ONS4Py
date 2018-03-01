@@ -50,7 +50,7 @@ class RwaGame(object):
         :param img_height: 游戏界面的高度
         """
         super(RwaGame, self).__init__()
-        print('创建RWA Game，创建地址是：{}'.format(id(self)))
+        print('创建RWA Game，创建地址是：{}，miu是：{}'.format(id(self), miu))
         self.net_config = net_config
         self.wave_num = wave_num
         self.img_width = img_width
@@ -129,10 +129,11 @@ class RwaGame(object):
         :return:
         """
         if action is -1:
-            return np.array([None, None]), -999, True, None
+            return np.array([None, None]), 0, True, None
 
         done = False
         # 首先，判断当前的处境，该时间点是否有业务到达或者离去，如果有，有几个
+        print('event id is: {}, total events is {}'.format(self.event_iter, len(self.events)))
         if self.events[self.event_iter][0] > self.time:
             # 如果该时间点没有到达或者离去的业务，则action选什么都无所谓
             if action == self.k * self.wave_num:
@@ -180,6 +181,7 @@ class RwaGame(object):
             # 如果已经把事件全部处理完，
             done = True
             observation = self.net.gen_img(self.img_width, self.img_height, None, None, self.mode)
+            print('已经走到尽头')
             return observation, reward, done, None
 
         # 第三，开始进行下一状态的处理。之前的处理中，时间和事件都已经推进到下一个单位了
@@ -202,6 +204,7 @@ class RwaGame(object):
                 self.event_iter += 1
                 if self.event_iter == len(self.events):
                     # 如果已经把事件全部处理完，
+                    print('已经走到尽头')
                     done = True
                     observation = self.net.gen_img(self.img_width, self.img_height, None, None, self.mode)
                     return observation, reward, done, None
@@ -256,8 +259,14 @@ class RwaGame(object):
                 return 0
 
     def k_shortest_paths(self, source, target):
+        """
+        如果源宿点是None，则返回len为1的None数组
+        :param source:
+        :param target:
+        :return:
+        """
         if source is None:
-            return []
+            return [None]
         generator = shortest_simple_paths(self.net, source, target, weight=self.weight)
         rtn = []
         index = 0

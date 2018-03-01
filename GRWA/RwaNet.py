@@ -116,7 +116,7 @@ class RwaNetwork(nx.Graph):
         :param path_list:
         :return: 是否存在路径，路径index，波长index
         """
-        if len(path_list) == 0:
+        if len(path_list) == 0 or path_list[0] is None:
             return False, -1, -1
 
         for path_index, nodes in enumerate(path_list):

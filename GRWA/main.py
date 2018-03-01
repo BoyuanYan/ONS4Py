@@ -93,14 +93,8 @@ def ksp(args, weight):
     rewards_count = [0 for i in range(args.workers)]
 
     envs = [make_env(net_config=args.net, wave_num=args.wave_num, rou=args.rou, miu=args.miu,
-                       max_iter=args.max_iter, k=args.k, mode=args.mode, img_width=args.img_width,
-                       img_height=args.img_height, weight=weight) for _ in range(args.workers)]
-
-    # a = []
-    # for index, i in enumerate(envs):
-    #     a.append(i())
-    #     print('主进程中打开的env的地址是：{}'.format(id(a[index])))
-    #     a[index].reset()
+                       max_iter=args.max_iter*(i+1), k=args.k, mode=args.mode, img_width=args.img_width,
+                       img_height=args.img_height, weight=weight) for i in range(args.workers)]
 
     envs = SubprocEnv(envs)
 
@@ -112,9 +106,8 @@ def ksp(args, weight):
         # 如果没有全部结束
         path_list = envs.k_shortest_paths(observation)
         exist, path_index, wave_index = envs.exist_rw_allocation(path_list)
-
         for rank in range(args.workers):
-            if done[rank] is True:
+            if bool(done[rank]) is True:
                 # 如果该进程的游戏已经结束了
                 actions.append(-1)
             else:
@@ -131,17 +124,11 @@ def ksp(args, weight):
                 else:
                     # 如果当前时间没有业务到达
                     actions.append(args.wave_num*args.k)
-
-        actions[len(actions)-1] = 30  # 测试多进程
+            rewards_count[rank] += reward[rank]  # 计算reward总和
 
         envs.step_async(actions)
         observation, reward, done, _ = envs.step_wait()
-
         is_done = (np.sum(done) == args.workers)
-
-        rewards_count[0] += reward[0]
-        rewards_count[1] += reward[1]
-
 
     envs.close()
 
