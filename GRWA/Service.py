@@ -1,8 +1,7 @@
-from RwaNet import RwaNetwork, k_shortest_paths
+from RwaNet import RwaNetwork
 from gym.spaces.discrete import Discrete
-from gym.spaces.box import Box
 import numpy as np
-import queue
+from networkx import shortest_simple_paths
 
 
 modes = ['alg', 'learning']
@@ -51,6 +50,7 @@ class RwaGame(object):
         :param img_height: 游戏界面的高度
         """
         super(RwaGame, self).__init__()
+        print('创建RWA Game，创建地址是：{}'.format(id(self)))
         self.net_config = net_config
         self.wave_num = wave_num
         self.img_width = img_width
@@ -125,9 +125,12 @@ class RwaGame(object):
     def step(self, action) -> [object, float, bool, dict]:
         """
         在当前时间点self.time,执行行为action，获取reward，并且转向下一状态。
-        :param action:
+        :param action: 所采取的行为，默认是int类型。如果取值为-1，表示暂停游戏，游戏状态不变化。
         :return:
         """
+        if action is -1:
+            return np.array([None, None]), -999, True, None
+
         done = False
         # 首先，判断当前的处境，该时间点是否有业务到达或者离去，如果有，有几个
         if self.events[self.event_iter][0] > self.time:
@@ -149,14 +152,17 @@ class RwaGame(object):
             else:
                 # 如果该时间点第一个事件是业务到达，则按照action选择处理
                 print("process arrival event")
-                reward = self.exec_action(action, self.services[self.events[self.event_iter][1]])
+                # print("event id is {}".format(self.event_iter))
+                ser = self.services[self.events[self.event_iter][1]]
+                reward = self.exec_action(action, ser)
+                # print("{}: service {} 's src and dst is {}, {}".format(id(ser), ser.index, ser.src, ser.dst))
                 self.event_iter += 1
                 while self.events[self.event_iter][0] == self.time:
                     # 该时间点处理完业务到达以后，后续还有业务离去事件(不可能同一个时间点有多个业务到达)
                     assert self.events[self.event_iter][2] is False
                     leave_service = self.services[self.events[self.event_iter][1]]
+                    print('process leave event')
                     if hasattr(leave_service, 'path'):  # 如果该业务分配时候成功了
-                        print('process leave event')
                         self.net.set_wave_state(wave_index=leave_service.wave_index,
                                                 nodes=leave_service.path,
                                                 state=True,
@@ -185,8 +191,8 @@ class RwaGame(object):
             # TODO 处理当前时间点排在到达业务之前的离去业务，并将self.event_iter指向下一个要处理的事件
             while self.events[self.event_iter][2] is False and self.events[self.event_iter][0] == self.time:
                 leave_service = self.services[self.events[self.event_iter][1]]
+                print('process leave event')
                 if hasattr(leave_service, 'path'):  # 如果该业务分配时候成功了
-                    print('process leave event')
                     self.net.set_wave_state(wave_index=leave_service.wave_index,
                                             nodes=leave_service.path,
                                             state=True,
@@ -223,7 +229,7 @@ class RwaGame(object):
         :param service:
         :return: reward
         """
-        path_list = k_shortest_paths(self.net, service.src, service.dst, k=self.k, weight=self.weight)
+        path_list = self.k_shortest_paths(service.src, service.dst)
         is_avai, _, _ = self.net.exist_rw_allocation(path_list)
         if action == self.NO_ACTION:
             if is_avai:
@@ -249,3 +255,15 @@ class RwaGame(object):
                 # 如果不存在可分配的方案，但是选择了非NO-ACTION的选项
                 return 0
 
+    def k_shortest_paths(self, source, target):
+        if source is None:
+            return []
+        generator = shortest_simple_paths(self.net, source, target, weight=self.weight)
+        rtn = []
+        index = 0
+        for i in generator:
+            index += 1
+            if index > self.k:
+                break
+            rtn.append(i)
+        return rtn

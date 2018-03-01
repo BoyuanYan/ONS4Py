@@ -116,7 +116,9 @@ class RwaNetwork(nx.Graph):
         :param path_list:
         :return: 是否存在路径，路径index，波长index
         """
-        assert len(path_list) > 0
+        if len(path_list) == 0:
+            return False, -1, -1
+
         for path_index, nodes in enumerate(path_list):
             edges = self.extract_path(nodes)
             # print(edges)
@@ -156,14 +158,3 @@ class RwaNetwork(nx.Graph):
             start_node = end_node
         return rtn
 
-
-def k_shortest_paths(G, source, target, k, weight=None):
-    generator = nx.shortest_simple_paths(G, source, target, weight=weight)
-    rtn = []
-    index = 0
-    for i in generator:
-        index += 1
-        if index > k:
-            break
-        rtn.append(i)
-    return rtn
