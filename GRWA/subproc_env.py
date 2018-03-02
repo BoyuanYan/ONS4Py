@@ -10,9 +10,10 @@ def worker(remote, parent_remote, env_fn_wrapper):
         cmd, data = remote.recv()
         if cmd == 'step':
             ob, reward, done, info = env.step(data)
-            #  TODO 如果是应用alg，则下面两行要注释掉。 这样写的话，就无法判断游戏是否结束了？？？
+            # 如果本轮游戏结束，则开启新一轮游戏
             if done:
-                ob, reward, done, info = env.reset()
+                print("游戏结束")
+                ob, reward, _, info = env.reset()
             remote.send((ob, reward, done, info))
         elif cmd == 'reset':
             ob, reward, done, info = env.reset()
@@ -55,11 +56,19 @@ class SubprocEnv(object):
             remote.close()
 
     def step_async(self, actions):
+        """
+        异步在多进程中执行行为，无返回值。返回值在step_wait函数中得到
+        :param actions:
+        """
         for remote, action in zip(self.remotes, actions):
             remote.send(('step', action))
         self.waiting = True
 
     def step_wait(self):
+        """
+        异步在多进程中或许执行结果，一定要在step_async后调用
+        :return:
+        """
         results = [remote.recv() for remote in self.remotes]
         self.waiting = False
         obs, rews, dones, infos = zip(*results)
@@ -93,7 +102,6 @@ class SubprocEnv(object):
         for remote, sd in zip(self.remotes, src_dst):
             remote.send(('k_shortest_paths', sd))
         result = [remote.recv() for remote in self.remotes]
-        print(result)
         return result
 
     def close(self):

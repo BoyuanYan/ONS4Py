@@ -106,3 +106,8 @@ ENV/
 train.txt
 val.txt
 *.zip
+
+log*
+*.tar
+tmp/
+*.ipynb

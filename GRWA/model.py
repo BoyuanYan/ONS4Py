@@ -19,24 +19,40 @@ def weights_init(m):
 
 
 class FFPolicy(nn.Module):
+    """
+    执行神经网络运算的父类
+    """
     def __init__(self):
         super(FFPolicy, self).__init__()
 
     def forward(self, inputs):
         raise NotImplementedError
 
-    def act(self, inputs, states, masks, deterministic=False):
-        value, x, states = self(inputs, states, masks)
-        action = self.dist.sample(x, deterministic=deterministic)
-        action_log_probs, dist_entropy = self.dist.logprobs_and_entropy(x, action)
-        return value, action, action_log_probs, states
+    def act(self, inputs, deterministic: bool):
+        """
+        以deterministic的方式，根据网络计算结果采取action，并且评估该状态的价值函数的值。
+        :param inputs:
+        :param deterministic: True表示取概率最高的action值，False表示按照概率分布取action值。
+        :return:
+        """
+        value, x = self(inputs)
+        action = self.cls_linear.sample(x, deterministic=deterministic)
+        action_log_probs, cls_entropy = self.cls_linear.logprobs_and_entropy(x, action)
+        return value, action, action_log_probs
 
-    def evaluate_actions(self, inputs, states, masks, actions):
-        value, x, states = self(inputs, states, masks)
-        action_log_probs, dist_entropy = self.dist.logprobs_and_entropy(x, actions)
-        return value, action_log_probs, dist_entropy, states
+    def evaluate_actions(self, inputs, actions):
+        """
+        评估在状态inputs下，采取行为actions的价值。
+        :param inputs:
+        :param actions:
+        :return:
+        """
+        value, x = self(inputs)
+        action_log_probs, cls_entropy = self.cls_linear.logprobs_and_entropy(x, actions)
+        return value, action_log_probs, cls_entropy
 
-class FcNet(nn.Module):
+
+class FcNet(FFPolicy):
     """
     全连接神经网络
     """
@@ -50,25 +66,108 @@ class FcNet(nn.Module):
         for i in range(self.layer_num):
             self.model.add_module('layer'+str(i+1),
                                   nn.Linear(in_features=layers[i], out_features=layers[i+1], bias=True))
-        self.pi = nn.Linear(layers[self.layer_num], pi_out, bias=True)
-        self.value_func = nn.Linear(layers[self.layer_num], 1, bias=True)
+        self.cls_linear = Categorical(layers[self.layer_num], pi_out)
+        self.critic_linear = nn.Linear(layers[self.layer_num], 1, bias=True)
 
-    def forward(self, x, mode):
-        """
+        self.train()
+        self.apply(weights_init)
 
-        :param x:如果为pi，表示计算行为函数，如果为vf，表示计算价值函数
-        :param mode:
-        :return:
-        """
-        x = self.model(x)
-        if mode.startswith('pi'):
-            x = self.pi(x)
-        elif mode.startswith('vf'):
-            x = self.value_func(x)
-        else:
-            raise ValueError('unsupported mode parameter')
+    def forward(self, inputs):
+        x = self.model(inputs)
+        return self.critic_linear(x), x
 
-        return x
+
+class SimpleNet(FFPolicy):
+    """
+    非常简单的网络，为了能够在自己的破电脑上也能运行程序，我也是拼了
+    """
+
+    def __init__(self, in_channels: int=3, num_classes=1000):
+        super(SimpleNet, self).__init__()
+        mult = [1, 2, 3]
+        print('build simplenet with in_channel {}, and out_channel {}'.format(in_channels, num_classes))
+        self.model = nn.Sequential(
+            # nx224x224 --> 2nx112x112
+            nn.Conv2d(in_channels=in_channels, out_channels=in_channels * mult[0], kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(num_features=in_channels * mult[0]),
+            nn.ReLU(inplace=True),
+            # 2nx112x112 --> 3nx28x28
+            nn.Conv2d(in_channels=in_channels * mult[0], out_channels=in_channels * mult[1], kernel_size=5, stride=4, padding=1),
+            nn.BatchNorm2d(num_features=in_channels * mult[1]),
+            nn.ReLU(inplace=True),
+            # 3nx28x28 --> 4nx7x7
+            nn.Conv2d(in_channels=in_channels * mult[1], out_channels=in_channels * mult[2], kernel_size=5, stride=4, padding=1),
+            nn.BatchNorm2d(num_features=in_channels * mult[2]),
+            nn.ReLU(inplace=True),
+        )
+        self.num_nn = in_channels * mult[2] * 7 * 7
+        self.fc = nn.Sequential(
+            nn.Linear(in_features=self.num_nn, out_features=1024, bias=True),
+            nn.ReLU(inplace=True)
+        )
+
+        self.critic_linear = nn.Linear(1024, 1)
+        self.cls_linear = Categorical(1024, num_classes)  # classification 分类器
+
+        self.train()  # 设置成训练模式
+        self.apply(weights_init)  # 初始化相关参数
+
+    def forward(self, inputs):
+        x = self.model(inputs)
+        x = x.view(-1, self.num_nn)
+        x = self.fc(x)
+
+        return self.critic_linear(x), x
+
+
+class AlexNet(FFPolicy):
+    """
+    AlexNet的结构变体，可见：https://github.com/BoyuanYan/pytorch-playground/blob/master/imagenet/alexnet.py
+    """
+
+    def __init__(self, in_channels: int=3, num_classes=1000):
+        super(AlexNet, self).__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(in_channels, 64, kernel_size=11, stride=4, padding=2),
+            nn.BatchNorm2d(num_features=64),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.Conv2d(64, 192, kernel_size=5, padding=2),
+            nn.BatchNorm2d(num_features=192),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.Conv2d(192, 384, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=384),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(384, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=256),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=256),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+        )
+        self.classifier = nn.Sequential(
+            nn.Dropout(),
+            nn.Linear(256 * 6 * 6, 4096),
+            nn.ReLU(inplace=True),
+            nn.Dropout(),
+            nn.Linear(4096, 4096),
+            nn.ReLU(inplace=True),
+        )
+
+        self.critic_linear = nn.Linear(4096, 1)
+        self.cls_linear = Categorical(4096, num_classes)  # classification 分类器
+
+        self.train()  # 设置成训练模式
+        self.apply(weights_init)  # 初始化相关参数
+
+    def forward(self, inputs):
+        x = self.features(inputs)
+        x = x.view(-1, 256 * 6 * 6)
+        x = self.classifier(x)
+
+        return self.critic_linear(x), x
 
 
 class MobileNetV2(FFPolicy):
@@ -264,7 +363,10 @@ class Categorical(nn.Module):
         log_probs = F.log_softmax(x, dim=1)  # n x num_output
         probs = F.softmax(x, dim=1)  # n x num_output
         # n x 1，聚合，从每一行中，选择出log概率最大的那个
+        # print('before shape is {}'.format(log_probs))
         action_log_probs = log_probs.gather(1, actions)
+        # print('action is {}'.format(actions))
+        # print('after shape is {}'.format(action_log_probs))
         # 计算熵，由于没有绝对正确的label标记，因此，该熵值仅仅用于计算action space中所有选项的概率分布是否平均，越平均，说明越接近random，值越高
         dist_entropy = -(log_probs * probs).sum(-1).mean()
         return action_log_probs, dist_entropy

@@ -3,9 +3,10 @@ import os
 import numpy as np
 import graphviz as gz
 from PIL import Image
+import subprocess as sp
 
 
-file_prefix = "resources"
+file_prefix = "../resources"
 
 
 class RwaNetwork(nx.Graph):
@@ -46,16 +47,19 @@ class RwaNetwork(nx.Graph):
             return np.array([src, dst])
         elif mode.startswith('learning'):
             rtn = None
+            pid = os.path.join('tmp', str(os.getpid()))
+            if not os.path.isdir(pid):
+                sp.getoutput('mkdir -p '+pid)
             for wave_index in range(self.wave_num):
-                png_name = str(wave_index)
+                png_name = os.path.join(pid, str(wave_index))
                 gz_graph = gz.Graph(format='png', engine='neato')
                 gz_graph.attr('node', shape='point', fixedsize='true', height='0.1', width='0.1', label='')
                 gz_graph.attr('edge')
                 for node in self.nodes():
                     gz_graph.node(name=node)
                 if src and dst:  # 如果src和dst都不是None
-                    gz_graph.node(name=src, shape='triangle', height='0.15', width='0.15')
-                    gz_graph.node(name=dst, shape='triangle', height='0.15', width='0.15')
+                    gz_graph.node(name=src, shape='triangle', height='0.2', width='0.2')
+                    gz_graph.node(name=dst, shape='triangle', height='0.2', width='0.2')
                 for edge in self.edges():
                     if self.get_edge_data(edge[0], edge[1])['is_wave_avai'][wave_index]:
                         gz_graph.edge(edge[0], edge[1])
@@ -63,10 +67,11 @@ class RwaNetwork(nx.Graph):
                         gz_graph.edge(edge[0], edge[1], color='white')
                 gz_graph.render(png_name, cleanup=True)
             for wave_index in range(self.wave_num):
-                img = Image.open(str(wave_index)+'.png')
+                img = Image.open(os.path.join(pid, str(wave_index)+'.png'))
                 img = img.convert('L')  # 转灰度
                 img = img.resize(size=(width, height))  # resize
                 img = np.array(img)  # convert to np.array
+                img = img / 255.0  # 归一化到[0-1]
                 img = img[np.newaxis, :]  # add 1 dimension for channel
                 if rtn is not None:
                     rtn = np.concatenate((rtn, np.array(img)), axis=0)
