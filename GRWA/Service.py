@@ -2,6 +2,7 @@ from RwaNet import RwaNetwork
 from gym.spaces.discrete import Discrete
 import numpy as np
 from networkx import shortest_simple_paths
+import random
 
 
 modes = ['alg', 'learning']
@@ -77,10 +78,10 @@ class RwaGame(object):
     def gen_src_dst(self):
         nodes = list(self.net.nodes())
         assert len(nodes) > 1
-        src_index = np.random.randint(0, len(nodes))
-        dst_index = np.random.randint(0, len(nodes))
+        src_index = random.randint(0, len(nodes)-1)
+        dst_index = random.randint(0, len(nodes)-1)
         while src_index == dst_index:
-            dst_index = np.random.randint(0, len(nodes))
+            dst_index = random.randint(0, len(nodes)-1)
         return nodes[src_index], nodes[dst_index]
 
     def reset(self):

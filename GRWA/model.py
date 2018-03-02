@@ -19,24 +19,40 @@ def weights_init(m):
 
 
 class FFPolicy(nn.Module):
+    """
+    执行神经网络运算的父类
+    """
     def __init__(self):
         super(FFPolicy, self).__init__()
 
     def forward(self, inputs):
         raise NotImplementedError
 
-    def act(self, inputs, states, masks, deterministic=False):
-        value, x, states = self(inputs, states, masks)
-        action = self.dist.sample(x, deterministic=deterministic)
-        action_log_probs, dist_entropy = self.dist.logprobs_and_entropy(x, action)
-        return value, action, action_log_probs, states
+    def act(self, inputs, deterministic: bool):
+        """
+        以deterministic的方式，根据网络计算结果采取action，并且评估该状态的价值函数的值。
+        :param inputs:
+        :param deterministic: True表示取概率最高的action值，False表示按照概率分布取action值。
+        :return:
+        """
+        value, x = self(inputs)
+        action = self.cls_linear.sample(x, deterministic=deterministic)
+        action_log_probs, cls_entropy = self.cls_linear.logprobs_and_entropy(x, action)
+        return value, action, action_log_probs
 
-    def evaluate_actions(self, inputs, states, masks, actions):
-        value, x, states = self(inputs, states, masks)
-        action_log_probs, dist_entropy = self.dist.logprobs_and_entropy(x, actions)
-        return value, action_log_probs, dist_entropy, states
+    def evaluate_actions(self, inputs, actions):
+        """
+        评估在状态inputs下，采取行为actions的价值。
+        :param inputs:
+        :param actions:
+        :return:
+        """
+        value, x = self(inputs)
+        action_log_probs, cls_entropy = self.cls_linear.logprobs_and_entropy(x, actions)
+        return value, action_log_probs, cls_entropy
 
-class FcNet(nn.Module):
+
+class FcNet(FFPolicy):
     """
     全连接神经网络
     """
@@ -50,25 +66,15 @@ class FcNet(nn.Module):
         for i in range(self.layer_num):
             self.model.add_module('layer'+str(i+1),
                                   nn.Linear(in_features=layers[i], out_features=layers[i+1], bias=True))
-        self.pi = nn.Linear(layers[self.layer_num], pi_out, bias=True)
-        self.value_func = nn.Linear(layers[self.layer_num], 1, bias=True)
+        self.cls_linear = Categorical(layers[self.layer_num], pi_out)
+        self.critic_linear = nn.Linear(layers[self.layer_num], 1, bias=True)
 
-    def forward(self, x, mode):
-        """
+        self.train()
+        self.apply(weights_init)
 
-        :param x:如果为pi，表示计算行为函数，如果为vf，表示计算价值函数
-        :param mode:
-        :return:
-        """
-        x = self.model(x)
-        if mode.startswith('pi'):
-            x = self.pi(x)
-        elif mode.startswith('vf'):
-            x = self.value_func(x)
-        else:
-            raise ValueError('unsupported mode parameter')
-
-        return x
+    def forward(self, inputs):
+        x = self.model(inputs)
+        return self.critic_linear(x), x
 
 
 class MobileNetV2(FFPolicy):
@@ -264,7 +270,10 @@ class Categorical(nn.Module):
         log_probs = F.log_softmax(x, dim=1)  # n x num_output
         probs = F.softmax(x, dim=1)  # n x num_output
         # n x 1，聚合，从每一行中，选择出log概率最大的那个
+        # print('before shape is {}'.format(log_probs))
         action_log_probs = log_probs.gather(1, actions)
+        # print('action is {}'.format(actions))
+        # print('after shape is {}'.format(action_log_probs))
         # 计算熵，由于没有绝对正确的label标记，因此，该熵值仅仅用于计算action space中所有选项的概率分布是否平均，越平均，说明越接近random，值越高
         dist_entropy = -(log_probs * probs).sum(-1).mean()
         return action_log_probs, dist_entropy

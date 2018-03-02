@@ -26,6 +26,9 @@
 先处理排在到达业务之前的离去业务，然后返回到达业务的observation
 2. 某时间点只有业务离去，则直接进行业务离去处理，然后返回业务离去
 之后的observation
+3. 如果执行完某个行为以后，返回done=True，即本轮游戏结束。则自动reset()，重新开启一局
+游戏，并且返回本次游戏的obs, reward，和done=True同时返回。由于done的作用仅仅是计算
+return和reward，所以一次的误差不会带来什么影响。
 
 
 #### 4. 优化想法
@@ -51,3 +54,5 @@
 
 1. numpy中的布尔类型默认是numpy.bool_，这种类型不能使用“is True”这样的语句来判断真值。
 要使用bool()做类型转换。
+2. np.random.randint太坑了，使用Process多进程同时启动生成的随机数完全一样，搞得我还以为
+是所有的进程共享一个游戏内存呢。改成了random模块的randint
