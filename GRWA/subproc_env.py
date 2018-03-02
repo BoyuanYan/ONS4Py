@@ -10,9 +10,9 @@ def worker(remote, parent_remote, env_fn_wrapper):
         cmd, data = remote.recv()
         if cmd == 'step':
             ob, reward, done, info = env.step(data)
-            #  TODO 如果是应用alg，则下面两行要注释掉。
-            # if done:
-            #     ob = env.reset()
+            #  TODO 如果是应用alg，则下面两行要注释掉。 这样写的话，就无法判断游戏是否结束了？？？
+            if done:
+                ob, reward, done, info = env.reset()
             remote.send((ob, reward, done, info))
         elif cmd == 'reset':
             ob, reward, done, info = env.reset()

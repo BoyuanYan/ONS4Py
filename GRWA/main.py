@@ -1,5 +1,5 @@
 from Service import RwaGame
-from MobileNetV2 import MobileNetV2
+from model import MobileNetV2
 from subproc_env import SubprocEnv
 import argparse
 import numpy as np
@@ -11,6 +11,8 @@ parser.add_argument('--mode', type=str, default='alg',
                     help='RWA执行的模式，alg表示使用ksp+FirstFit，learning表示学习模式')
 parser.add_argument('--workers', type=int, default=4,
                     help='默认同步执行多少个游戏。')
+parser.add_argument('--steps', type=int, default=10000,
+                    help="训练总共要进行的步骤数")
 #  RWA相关参数
 parser.add_argument('--net', type=str, default='6node.md',
                     help="网络拓扑图，默认在resources目录下搜索")
@@ -20,8 +22,8 @@ parser.add_argument('--rou', type=int, default=5,
                     help='业务到达的平均间隔，泊松分布')
 parser.add_argument('--miu', type=int, default=100,
                     help='业务持续的平均时间，泊松分布')
-parser.add_argument('--max-iter', type=int, default=10000,
-                    help='一次episode中，分配的最大业务数量')
+parser.add_argument('--max-iter', type=int, default=1000,
+                    help='一次episode中，分配的业务数量')
 parser.add_argument('--k', type=int, default=1,
                     help='RWA算法中，采取ksp计算路由的k值')
 parser.add_argument('--img-width', type=int, default=224,
@@ -46,6 +48,8 @@ parser.add_argument('--epsilon', type=float, default=1e-5,
 
 parser.add_argument('--gamma', type=float, default=0.99,
                     help='')
+parser.add_argument('--use-gae', type=bool, default=False,
+                    help='https://github.com/ikostrikov/pytorch-a2c-ppo-acktr/issues/49')
 
 
 
@@ -91,17 +95,17 @@ def ksp(args, weight):
     succ_count = [0 for i in range(args.workers)]
     fail_count = [0 for i in range(args.workers)]
     rewards_count = [0 for i in range(args.workers)]
+    step_count = 0
 
     envs = [make_env(net_config=args.net, wave_num=args.wave_num, rou=args.rou, miu=args.miu,
-                       max_iter=args.max_iter*(i+1), k=args.k, mode=args.mode, img_width=args.img_width,
-                       img_height=args.img_height, weight=weight) for i in range(args.workers)]
+                     max_iter=args.max_iter*(i+1), k=args.k, mode=args.mode, img_width=args.img_width,
+                     img_height=args.img_height, weight=weight) for i in range(args.workers)]
 
     envs = SubprocEnv(envs)
 
     observation, reward, done, _ = envs.reset()
-    is_done = (np.sum(done) == args.workers)
 
-    while not is_done:
+    while True:
         actions = []
         # 如果没有全部结束
         path_list = envs.k_shortest_paths(observation)
@@ -128,7 +132,9 @@ def ksp(args, weight):
 
         envs.step_async(actions)
         observation, reward, done, _ = envs.step_wait()
-        is_done = (np.sum(done) == args.workers)
+        step_count += 1
+        if step_count == args.steps:
+            break
 
     envs.close()
 
