@@ -22,7 +22,7 @@ parser.add_argument('--cnn', type=str, default='mobilenetv2',
                     help="用到的CNN网络，默认是mobilenetv2，还有simplenet，alexnet的选择")
 parser.add_argument('--workers', type=int, default=16,
                     help='默认同步执行多少个游戏，默认值16')
-parser.add_argument('--steps', type=int, default=10000,
+parser.add_argument('--steps', type=float, default=10e6,
                     help="所有游戏进程的训练总共要进行的步骤数")
 parser.add_argument('--save-dir', default='./trained_models/',
                     help='directory to save agent logs (default: ./trained_models/)')
@@ -141,6 +141,7 @@ def main():
     start = time.time()
 
     for updata_i in range(num_updates):
+        u_start = time.time()
         for step in range(args.num_steps):
             # 选择行为
             inp = Variable(rollout.observations[step], volatile=True)  # 禁止梯度更新
@@ -227,16 +228,22 @@ def main():
         # 输出日志
         if updata_i % args.log_interval == 0:
             end = time.time()
+            interval = end - u_start
+            remaining_seconds = (num_updates-updata_i-1) / args.log_interval * interval
+            remaining_hours = remaining_seconds // 3600
+            remaining_minutes = int((remaining_seconds % 3600) / 60)
             total_num_steps = (updata_i+1) * args.workers * args.num_steps
 
-            print("Updates {}, num timesteps {}, FPS {}, mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}, entropy {:.5f}, value loss {:.5f}, policy loss {:.5f}".
+            print("Updates {}, num timesteps {}, FPS {}, mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}, entropy {:.5f}, value loss {:.5f}, policy loss {:.5f}, remaining time {}:{}".
                 format(updata_i, total_num_steps,
                        int(total_num_steps / (end - start)),
                        final_rewards.mean(),
                        final_rewards.median(),
                        final_rewards.min(),
                        final_rewards.max(), cls_entropy.data[0],
-                       value_loss.data[0], action_loss.data[0]))
+                       value_loss.data[0], action_loss.data[0],
+                       remaining_hours, remaining_minutes,)
+                  )
             # raise NotImplementedError
 
     envs.close()
