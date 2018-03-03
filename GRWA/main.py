@@ -51,6 +51,8 @@ parser.add_argument('--img-height', type=int, default=224,
                     help="生成的网络灰度图的高度")
 parser.add_argument('--weight', type=str, default='None',
                     help='计算路由的时候，以什么属性为权重')
+parser.add_argument('--step-over', type=str, default='one_time',
+                    help="步进的模式，one_time表示每调用一次step，执行一个时间步骤；one_service表示每调用一次step，执行到下一个service到达的时候。")
 # RL算法相关参数
 parser.add_argument('--num-steps', type=int, default=5,
                     help='number of forward steps in A2C (default: 5)')
@@ -119,7 +121,7 @@ def main():
     # 创建游戏环境
     envs = [make_env(net_config=args.net, wave_num=args.wave_num, rou=args.rou, miu=args.miu,
                      max_iter=args.max_iter, k=args.k, mode=args.mode, img_width=args.img_width,
-                     img_height=args.img_height, weight=weight) for i in range(args.workers)]
+                     img_height=args.img_height, weight=weight, step_over=args.step_over) for i in range(args.workers)]
     envs = SubprocEnv(envs)
     # 创建游戏运行过程中相关变量存储更新的容器
     rollout = RolloutStorage(num_steps=args.num_steps, num_processes=args.workers,
@@ -215,6 +217,7 @@ def main():
         if updata_i % args.save_interval == 0:
             save_path = os.path.join(args.save_dir, 'a2c')
             save_path = os.path.join(save_path, args.cnn)
+            save_path = os.path.join(save_path, args.step_over)
             if os.path.exists(save_path) and os.path.isdir(save_path):
                 pass
             else:
@@ -267,11 +270,11 @@ def update_current_obs(current_obs, obs):
 
 def make_env(net_config: str, wave_num: int, rou: float, miu: float,
              max_iter: int, k: int, mode: str, img_width: int, img_height: int,
-             weight):
+             weight, step_over):
     def _thunk():
         rwa_game = RwaGame(net_config=net_config, wave_num=wave_num, rou=rou, miu=miu,
                            max_iter=max_iter, k=k, mode=mode, img_width=img_width,
-                           img_height=img_height, weight=weight)
+                           img_height=img_height, weight=weight, step_over=step_over)
         return rwa_game
     return _thunk
 
@@ -291,7 +294,7 @@ def ksp(args, weight):
 
     envs = [make_env(net_config=args.net, wave_num=args.wave_num, rou=args.rou, miu=args.miu,
                      max_iter=args.max_iter*(i+1), k=args.k, mode=args.mode, img_width=args.img_width,
-                     img_height=args.img_height, weight=weight) for i in range(args.workers)]
+                     img_height=args.img_height, weight=weight, step_over=args.step_over) for i in range(args.workers)]
 
     envs = SubprocEnv(envs)
 
