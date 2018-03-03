@@ -102,7 +102,7 @@ class SimpleNet(FFPolicy):
         )
         self.num_nn = in_channels * mult[2] * 7 * 7
         self.fc = nn.Sequential(
-            nn.Linear(in_features=in_channels * mult[2], out_features=1024, bias=True),
+            nn.Linear(in_features=self.num_nn, out_features=1024, bias=True),
             nn.ReLU(inplace=True)
         )
 
