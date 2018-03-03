@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.init import constant, kaiming_normal
 from torch.autograd import Variable
+from collections import OrderedDict
+import math
+import torch
 
 
 def weights_init(m):
@@ -372,8 +375,109 @@ class Categorical(nn.Module):
         return action_log_probs, dist_entropy
 
 
-def test():
-    model = MobileNetV2()
-    x = Variable(randn(1, 3, 224, 224))
-    y = model(x)
-    print(y.size())
+class Fire(nn.Module):
+
+    def __init__(self, inplanes, squeeze_planes,
+                 expand1x1_planes, expand3x3_planes):
+        super(Fire, self).__init__()
+        self.inplanes = inplanes
+
+        self.group1 = nn.Sequential(
+            OrderedDict([
+                ('squeeze', nn.Conv2d(inplanes, squeeze_planes, kernel_size=1)),
+                ('squeeze_activation', nn.ReLU(inplace=True))
+            ])
+        )
+
+        self.group2 = nn.Sequential(
+            OrderedDict([
+                ('expand1x1', nn.Conv2d(squeeze_planes, expand1x1_planes, kernel_size=1)),
+                ('expand1x1_activation', nn.ReLU(inplace=True))
+            ])
+        )
+
+        self.group3 = nn.Sequential(
+            OrderedDict([
+                ('expand3x3', nn.Conv2d(squeeze_planes, expand3x3_planes, kernel_size=3, padding=1)),
+                ('expand3x3_activation', nn.ReLU(inplace=True))
+            ])
+        )
+
+    def forward(self, x):
+        x = self.group1(x)
+        return torch.cat([self.group2(x),self.group3(x)], 1)
+
+
+class SqueezeNet(FFPolicy):
+
+    def __init__(self, in_channels: int=3, num_classes=1000, version=1.0):
+        super(SqueezeNet, self).__init__()
+        if version not in [1.0, 1.1]:
+            raise ValueError("Unsupported SqueezeNet version {version}:"
+                             "1.0 or 1.1 expected".format(version=version))
+        self.num_classes = num_classes
+        if version == 1.0:
+            self.features = nn.Sequential(
+                nn.Conv2d(in_channels, 96, kernel_size=7, stride=2),
+                nn.ReLU(inplace=True),
+                nn.MaxPool2d(kernel_size=3, stride=2, ceil_mode=True),
+                Fire(96, 16, 64, 64),
+                Fire(128, 16, 64, 64),
+                Fire(128, 32, 128, 128),
+                nn.MaxPool2d(kernel_size=3, stride=2, ceil_mode=True),
+                Fire(256, 32, 128, 128),
+                Fire(256, 48, 192, 192),
+                Fire(384, 48, 192, 192),
+                Fire(384, 64, 256, 256),
+                nn.MaxPool2d(kernel_size=3, stride=2, ceil_mode=True),
+                Fire(512, 64, 256, 256),
+            )
+        else:
+            self.features = nn.Sequential(
+                nn.Conv2d(in_channels, 64, kernel_size=3, stride=2),
+                nn.ReLU(inplace=True),
+                nn.MaxPool2d(kernel_size=3, stride=2, ceil_mode=True),
+                Fire(64, 16, 64, 64),
+                Fire(128, 16, 64, 64),
+                nn.MaxPool2d(kernel_size=3, stride=2, ceil_mode=True),
+                Fire(128, 32, 128, 128),
+                Fire(256, 32, 128, 128),
+                nn.MaxPool2d(kernel_size=3, stride=2, ceil_mode=True),
+                Fire(256, 48, 192, 192),
+                Fire(384, 48, 192, 192),
+                Fire(384, 64, 256, 256),
+                Fire(512, 64, 256, 256),
+            )
+        # Final convolution is initialized differently form the rest
+        final_conv = nn.Conv2d(512, 1024, kernel_size=1)
+        self.classifier = nn.Sequential(
+            nn.Dropout(p=0.5),
+            final_conv,
+            nn.ReLU(inplace=True),
+            nn.AvgPool2d(13)
+        )
+        # TODO 在Squeezenet最后增加了linear评价器和分类器
+        self.critic_linear = nn.Linear(1024, 1)  # value function 评价器
+        self.cls_linear = Categorical(1024, num_classes)  # classification 分类器
+
+        self.train()  # 设置成训练模式
+        self.apply(weights_init)  # 初始化相关参数
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                gain = 2.0
+                if m is final_conv:
+                    m.weight.data.normal_(0, 0.01)
+                else:
+                    fan_in = m.kernel_size[0] * m.kernel_size[1] * m.in_channels
+                    u = math.sqrt(3.0 * gain / fan_in)
+                    m.weight.data.uniform_(-u, u)
+                if m.bias is not None:
+                    m.bias.data.zero_()
+
+    def forward(self, inputs):
+        x = self.features(inputs)
+        x = self.classifier(x)
+        x = x.view(x.size(0), 1024)
+
+        return self.critic_linear(x), x
