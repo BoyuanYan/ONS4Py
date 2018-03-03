@@ -157,7 +157,12 @@ def main():
             envs.step_async(cpu_actions)
             obs, reward, done, info = envs.step_wait()  # reward和done都是(n,)向量
             allocated_services += (reward==ARRIVAL_OP_OT).sum()  # 计算分配成功的reward的次数
-            total_services += (info==True).sum()  # 计算本次step中包含多少个业务到达事件
+            if args.step_over.startswith('one_time'):
+                total_services += (info==True).sum()  # 计算本次step中包含多少个业务到达事件
+            elif args.step_over.startswith('one_service'):
+                total_services += args.num_steps
+            else:
+                raise NotImplementedError
             reward = torch.from_numpy(np.expand_dims(reward, 1)).float()
             # print('reward is {}'.format(reward))
             episode_rewards += reward  # 累加reward分数
@@ -212,7 +217,8 @@ def main():
 
         # 事后一支烟
         rollout.after_update()
-
+        print("updates {} finished".format(update_i))
+        print("total services is {}".format(total_services))
         # 存储模型
         if updata_i % args.save_interval == 0:
             save_path = os.path.join(args.save_dir, 'a2c')
