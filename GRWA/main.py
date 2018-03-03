@@ -11,7 +11,7 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 from torch.autograd import Variable
-from distributed_utils import dist_init, average_gradients, DistModule
+# from distributed_utils import dist_init, average_gradients, DistModule
 
 parser = argparse.ArgumentParser(
     description='GRWA Training')
@@ -201,7 +201,7 @@ def main():
         total_loss.backward()
         # 下面进行迷之操作。。梯度裁剪（https://www.cnblogs.com/lindaxin/p/7998196.html）
         nn.utils.clip_grad_norm(actor_critic.parameters(), args.max_grad_norm)
-        average_gradients(actor_critic)
+        # average_gradients(actor_critic)
         optimizer.step()
 
         # 事后一支烟
