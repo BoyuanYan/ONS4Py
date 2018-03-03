@@ -5,11 +5,13 @@ from subproc_env import SubprocEnv
 from storage import RolloutStorage
 import argparse
 import time
+import random
 import numpy as np
 import torch
 import torch.optim as optim
 import torch.nn as nn
 from torch.autograd import Variable
+from distributed_utils import dist_init, average_gradients, DistModule
 
 parser = argparse.ArgumentParser(
     description='GRWA Training')
@@ -28,6 +30,8 @@ parser.add_argument('--save-interval', type=int, default=100,
                     help='save interval, one save per n updates (default: 100)')
 parser.add_argument('--log-interval', type=int, default=10,
                     help='log interval, one log per n updates (default: 10)')
+parser.add_argument('--cuda', type=bool, default=False,
+                    help="是否使用GPU进行运算。如果为True，表示在集群上进行运算，有分布式操作。")
 #  RWA相关参数
 parser.add_argument('--net', type=str, default='6node.md',
                     help="网络拓扑图，默认在resources目录下搜索")
@@ -81,6 +85,8 @@ def main():
     num_cls = args.wave_num * args.k + 1  # 所有的路由和波长选择组合，加上啥都不选
     action_shape = 1  # action的维度，默认是1.
     num_updates = args.steps // args.workers // args.num_steps  # 梯度一共需要更新的次数
+
+
     # 解析weight
     if args.weight.startswith('None'):
         weight = None
@@ -105,6 +111,11 @@ def main():
     else:
         raise NotImplementedError
 
+    if args.cuda:
+        # 如果要使用cuda进行计算
+        actor_critic.cuda()
+        # actor_critic = DistModule(actor_critic)
+
     # 创建游戏环境
     envs = [make_env(net_config=args.net, wave_num=args.wave_num, rou=args.rou, miu=args.miu,
                      max_iter=args.max_iter, k=args.k, mode=args.mode, img_width=args.img_width,
@@ -122,6 +133,10 @@ def main():
     # These variables are used to compute average rewards for all processes.
     episode_rewards = torch.zeros([args.workers, 1])
     final_rewards = torch.zeros([args.workers, 1])
+
+    if args.cuda:
+        current_obs = current_obs.cuda()
+        rollout.cuda()
 
     start = time.time()
 
@@ -146,6 +161,10 @@ def main():
             final_rewards *= masks
             final_rewards += (1 - masks) * episode_rewards
             episode_rewards *= masks
+
+            if args.cuda:
+                masks = masks.cuda()
+
             # 给masks扩充2个维度，与current_obs相乘。则运行结束的游戏进程对应的obs值会变成0，图像上表示全黑，即游戏结束的画面。
             current_obs *= masks.unsqueeze(2).unsqueeze(2)
             update_current_obs(current_obs=current_obs, obs=obs)
@@ -182,6 +201,7 @@ def main():
         total_loss.backward()
         # 下面进行迷之操作。。梯度裁剪（https://www.cnblogs.com/lindaxin/p/7998196.html）
         nn.utils.clip_grad_norm(actor_critic.parameters(), args.max_grad_norm)
+        average_gradients(actor_critic)
         optimizer.step()
 
         # 事后一支烟
