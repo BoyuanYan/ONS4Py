@@ -48,11 +48,7 @@ class RwaNetwork(nx.Graph):
             return np.array([src, dst])
         elif mode.startswith('learning'):
             rtn = None
-            pid = os.path.join('tmp', str(os.getpid()))
-            if not os.path.isdir(pid):
-                sp.getoutput('mkdir -p '+pid)
             for wave_index in range(self.wave_num):
-                png_name = os.path.join(pid, str(wave_index))
                 gz_graph = gz.Graph(format='png', engine='neato')
                 gz_graph.attr('node', shape='point', fixedsize='true', height='0.1', width='0.1', label='')
                 gz_graph.attr('edge')
@@ -76,7 +72,7 @@ class RwaNetwork(nx.Graph):
                     rtn = np.concatenate((rtn, np.array(img)), axis=0)
                 else:
                     rtn = np.array(img)
-                
+
             return rtn
         else:
             raise ValueError("wrong mode parameter")
