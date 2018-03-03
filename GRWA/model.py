@@ -77,6 +77,99 @@ class FcNet(FFPolicy):
         return self.critic_linear(x), x
 
 
+class SimpleNet(FFPolicy):
+    """
+    非常简单的网络，为了能够在自己的破电脑上也能运行程序，我也是拼了
+    """
+
+    def __init__(self, in_channels: int=3, num_classes=1000):
+        super(SimpleNet, self).__init__()
+        mult = [1, 2, 3]
+        print('build simplenet with in_channel {}, and out_channel {}'.format(in_channels, num_classes))
+        self.model = nn.Sequential(
+            # nx224x224 --> 2nx112x112
+            nn.Conv2d(in_channels=in_channels, out_channels=in_channels * mult[0], kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(num_features=in_channels * mult[0]),
+            nn.ReLU(inplace=True),
+            # 2nx112x112 --> 3nx28x28
+            nn.Conv2d(in_channels=in_channels * mult[0], out_channels=in_channels * mult[1], kernel_size=5, stride=4, padding=1),
+            nn.BatchNorm2d(num_features=in_channels * mult[1]),
+            nn.ReLU(inplace=True),
+            # 3nx28x28 --> 4nx7x7
+            nn.Conv2d(in_channels=in_channels * mult[1], out_channels=in_channels * mult[2], kernel_size=5, stride=4, padding=1),
+            nn.BatchNorm2d(num_features=in_channels * mult[2]),
+            nn.ReLU(inplace=True),
+        )
+        self.num_nn = in_channels * mult[2] * 7 * 7
+        self.fc = nn.Sequential(
+            nn.Linear(in_features=self.num_nn, out_features=1024, bias=True),
+            nn.ReLU(inplace=True)
+        )
+
+        self.critic_linear = nn.Linear(1024, 1)
+        self.cls_linear = Categorical(1024, num_classes)  # classification 分类器
+
+        self.train()  # 设置成训练模式
+        self.apply(weights_init)  # 初始化相关参数
+
+    def forward(self, inputs):
+        x = self.model(inputs)
+        x = x.view(-1, self.num_nn)
+        x = self.fc(x)
+
+        return self.critic_linear(x), x
+
+
+class AlexNet(FFPolicy):
+    """
+    AlexNet的结构变体，可见：https://github.com/BoyuanYan/pytorch-playground/blob/master/imagenet/alexnet.py
+    """
+
+    def __init__(self, in_channels: int=3, num_classes=1000):
+        super(AlexNet, self).__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(in_channels, 64, kernel_size=11, stride=4, padding=2),
+            nn.BatchNorm2d(num_features=64),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.Conv2d(64, 192, kernel_size=5, padding=2),
+            nn.BatchNorm2d(num_features=192),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.Conv2d(192, 384, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=384),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(384, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=256),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(num_features=256),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+        )
+        self.classifier = nn.Sequential(
+            nn.Dropout(),
+            nn.Linear(256 * 6 * 6, 4096),
+            nn.ReLU(inplace=True),
+            nn.Dropout(),
+            nn.Linear(4096, 4096),
+            nn.ReLU(inplace=True),
+        )
+
+        self.critic_linear = nn.Linear(4096, 1)
+        self.cls_linear = Categorical(4096, num_classes)  # classification 分类器
+
+        self.train()  # 设置成训练模式
+        self.apply(weights_init)  # 初始化相关参数
+
+    def forward(self, inputs):
+        x = self.features(inputs)
+        x = x.view(-1, 256 * 6 * 6)
+        x = self.classifier(x)
+
+        return self.critic_linear(x), x
+
+
 class MobileNetV2(FFPolicy):
     """
     mobilenet V2。原文可见：https://arxiv.org/abs/1801.04381

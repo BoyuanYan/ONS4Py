@@ -12,6 +12,7 @@ def worker(remote, parent_remote, env_fn_wrapper):
             ob, reward, done, info = env.step(data)
             # 如果本轮游戏结束，则开启新一轮游戏
             if done:
+                print("游戏结束")
                 ob, reward, _, info = env.reset()
             remote.send((ob, reward, done, info))
         elif cmd == 'reset':

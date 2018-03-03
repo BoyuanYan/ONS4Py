@@ -71,6 +71,7 @@ class RwaNetwork(nx.Graph):
                 img = img.convert('L')  # 转灰度
                 img = img.resize(size=(width, height))  # resize
                 img = np.array(img)  # convert to np.array
+                img = img / 255.0  # 归一化到[0-1]
                 img = img[np.newaxis, :]  # add 1 dimension for channel
                 if rtn is not None:
                     rtn = np.concatenate((rtn, np.array(img)), axis=0)

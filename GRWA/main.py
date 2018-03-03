@@ -1,6 +1,6 @@
 import os
 from Service import RwaGame
-from model import MobileNetV2
+from model import MobileNetV2, SimpleNet, AlexNet
 from subproc_env import SubprocEnv
 from storage import RolloutStorage
 import argparse
@@ -16,6 +16,8 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument('--mode', type=str, default='alg',
                     help='RWA执行的模式，alg表示使用ksp+FirstFit，learning表示CNN学习模式, fcl表示FC学习模式，lstml表示LSTM学习模式')
+parser.add_argument('--cnn', type=str, default='mobilenetv2',
+                    help="用到的CNN网络，默认是mobilenetv2，还有simplenet，alexnet的选择")
 parser.add_argument('--workers', type=int, default=16,
                     help='默认同步执行多少个游戏，默认值16')
 parser.add_argument('--steps', type=int, default=10000,
@@ -77,6 +79,7 @@ def main():
     :return:
     """
     num_cls = args.wave_num * args.k + 1  # 所有的路由和波长选择组合，加上啥都不选
+    action_shape = 1  # action的维度，默认是1.
     num_updates = args.steps // args.workers // args.num_steps  # 梯度一共需要更新的次数
     # 解析weight
     if args.weight.startswith('None'):
@@ -90,7 +93,14 @@ def main():
     elif args.mode.startswith('learning'):
         # CNN学习模式下，osb的shape应该是CHW
         obs_shape = (args.wave_num, args.img_height, args.img_width)
-        actor_critic = MobileNetV2(in_channels=args.wave_num, num_classes=num_cls, t=6)
+        if args.cnn.startswith('mobilenetv2'):
+            actor_critic = MobileNetV2(in_channels=args.wave_num, num_classes=num_cls, t=6)
+        elif args.cnn.startswith('simplenet'):
+            actor_critic = SimpleNet(in_channels=args.wave_num, num_classes=num_cls)
+        elif args.cnn.startswith('alexnet'):
+            actor_critic = AlexNet(in_channels=args.wave_num, num_classes=num_cls)
+        else:
+            raise NotImplementedError
         optimizer = optim.RMSprop(actor_critic.parameters(), lr=args.base_lr, eps=args.epsilon, alpha=args.alpha)
     else:
         raise NotImplementedError
@@ -102,7 +112,7 @@ def main():
     envs = SubprocEnv(envs)
     # 创建游戏运行过程中相关变量存储更新的容器
     rollout = RolloutStorage(num_steps=args.num_steps, num_processes=args.workers,
-                             obs_shape=obs_shape, action_shape=num_cls)
+                             obs_shape=obs_shape, action_shape=action_shape)
     current_obs = torch.zeros(args.workers, *obs_shape)
 
     observation, _, _, _ = envs.reset()
@@ -123,12 +133,14 @@ def main():
             # 压缩维度，放到cpu上执行。因为没有用到GPU，所以并没有什么卵用，权当提示
             cpu_actions = action.data.squeeze(1).cpu().numpy()
             # actor_critic.act 得到的是action变量，需要将其转换成one_hot形式
-            one_hot_action = torch.zeros(action.size()[0], num_cls).scatter_(1, action.data, 1)
+            # one_hot_action = torch.zeros(action.size()[0], num_cls).scatter_(1, action.data, 1)
             # 观察observation，以及下一个observation
             envs.step_async(cpu_actions)
             obs, reward, done, info = envs.step_wait()  # reward和done都是(n,)向量
             reward = torch.from_numpy(np.expand_dims(reward, 1)).float()
+            # print('reward is {}'.format(reward))
             episode_rewards += reward  # 累加reward分数
+            # print("episode reward is {}".format(episode_rewards))
             # 如果游戏结束，则重新开始计算episode_rewards和final_rewards，并且以返回的reward为初始值重新进行累加。
             masks = torch.FloatTensor([[0.0] if d else [1.0] for d in done])  # True --> 0, False --> 1
             final_rewards *= masks
@@ -140,7 +152,7 @@ def main():
             # print("final_rewards is {}".format(final_rewards))
             # print("mask is {}".format(masks))
             # 把本步骤得到的结果存储起来
-            rollout.insert(step=step, current_obs=current_obs, action=one_hot_action, action_log_prob=action_log_prob.data,
+            rollout.insert(step=step, current_obs=current_obs, action=action.data, action_log_prob=action_log_prob.data,
                            value_pred=value.data, reward=reward, mask=masks)
 
         # 注意不要引用上述for循环定义的变量。下面变量的命名和使用都要注意。
@@ -150,10 +162,7 @@ def main():
 
         # 下面进行A2C算法梯度更新
         inps = Variable(rollout.observations[:-1].view(-1, *obs_shape))
-        acts = rollout.actions.view(-1, num_cls)
-        # 下面两步将acts从one_hot变成list
-        _, acts = acts.max(1)
-        acts = Variable(acts.view(-1, 1))
+        acts = Variable(rollout.actions.view(-1, action_shape))
 
         # print("a2cs's acts size is {}".format(acts.size()))
         value, action_log_probs, cls_entropy = actor_critic.evaluate_actions(inputs=inps, actions=acts)
@@ -181,6 +190,7 @@ def main():
         # 存储模型
         if updata_i % args.save_interval == 0:
             save_path = os.path.join(args.save_dir, 'a2c')
+            save_path = os.path.join(save_path, args.cnn)
             if os.path.exists(save_path) and os.path.isdir(save_path):
                 pass
             else:
@@ -209,11 +219,6 @@ def main():
                        value_loss.data[0], action_loss.data[0]))
             # raise NotImplementedError
 
-
-
-
-
-
     envs.close()
 
 
@@ -228,8 +233,8 @@ def update_current_obs(current_obs, obs):
 
 
 def make_env(net_config: str, wave_num: int, rou: float, miu: float,
-                 max_iter: int, k: int, mode: str, img_width: int, img_height: int,
-                 weight):
+             max_iter: int, k: int, mode: str, img_width: int, img_height: int,
+             weight):
     def _thunk():
         rwa_game = RwaGame(net_config=net_config, wave_num=wave_num, rou=rou, miu=miu,
                            max_iter=max_iter, k=k, mode=mode, img_width=img_width,

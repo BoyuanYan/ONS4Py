@@ -7,6 +7,18 @@ import random
 
 modes = ['alg', 'learning']
 
+# 重新开启一轮游戏
+INIT = 0
+# 该时间点没有业务到达，可能有业务离去（取决于事件排序）
+NOARRIVAL_NO    =   1  # 选择No-Action
+NOARRIVAL_OT    =   0  # 选择其他RW选项
+# 该时间点有业务到达（可能同时有业务离去），但是没有可达RW选项
+ARRIVAL_NOOP_NO =   1  # 选择No-Action
+ARRIVAL_NOOP_OT =   0  # 选择其他RW选项
+# 该时间点有业务到达（可能同时有业务离去），并且有可达RW选项
+ARRIVAL_OP_OT   =  10  # 选择可达的RW选项
+ARRIVAL_OP_NO   =  -5  # 选择不可达或者No-Action
+
 
 class Service(object):
     def __init__(self, index: int, src: str, dst: str,
@@ -51,7 +63,7 @@ class RwaGame(object):
         :param img_height: 游戏界面的高度
         """
         super(RwaGame, self).__init__()
-        print('创建RWA Game，创建地址是：{}，miu是：{}'.format(id(self), miu))
+        print('创建RWA Game')
         self.net_config = net_config
         self.wave_num = wave_num
         self.img_width = img_width
@@ -110,7 +122,7 @@ class RwaGame(object):
         # 返回第一个业务请求的状态
         src, dst = self.services[0].src, self.services[0].dst
         observation = self.net.gen_img(self.img_width, self.img_height, src, dst, self.mode)
-        reward = 1
+        reward = INIT
         done = False
         info = None
         self.time = self.services[0].arrival_time
@@ -121,7 +133,7 @@ class RwaGame(object):
         渲染当前环境，返回当前环境的图像
         :return:
         """
-        print("doesn't support")
+        raise NotImplementedError
 
     def step(self, action) -> [object, float, bool, dict]:
         """
@@ -134,15 +146,15 @@ class RwaGame(object):
 
         done = False
         # 首先，判断当前的处境，该时间点是否有业务到达或者离去，如果有，有几个
-        print('event id is: {}, total events is {}'.format(self.event_iter, len(self.events)))
+        # print('event id is: {}, total events is {}'.format(self.event_iter, len(self.events)))
         if self.events[self.event_iter][0] > self.time:
             # 如果该时间点没有到达或者离去的业务，则action选什么都无所谓
             if action == self.k * self.wave_num:
                 # 如果主动阻塞
-                reward = 1
+                reward = NOARRIVAL_NO
             else:
                 # 如果选择其他行为，虽然没用，但是还是要惩罚
-                reward = 0
+                reward = NOARRIVAL_OT
             self.time += 1  # 时间推进，事件已经指向下一个要处理的下标，暂时不动
 
         elif self.events[self.event_iter][0] == self.time:
@@ -153,7 +165,7 @@ class RwaGame(object):
                 raise RuntimeError("执行action遇到业务离去事件，该事件应该在action之前被处理！")
             else:
                 # 如果该时间点第一个事件是业务到达，则按照action选择处理
-                print("process arrival event")
+                # print("process arrival event")
                 # print("event id is {}".format(self.event_iter))
                 ser = self.services[self.events[self.event_iter][1]]
                 reward = self.exec_action(action, ser)
@@ -163,7 +175,7 @@ class RwaGame(object):
                     # 该时间点处理完业务到达以后，后续还有业务离去事件(不可能同一个时间点有多个业务到达)
                     assert self.events[self.event_iter][2] is False
                     leave_service = self.services[self.events[self.event_iter][1]]
-                    print('process leave event')
+                    # print('process leave event')
                     if hasattr(leave_service, 'path'):  # 如果该业务分配时候成功了
                         self.net.set_wave_state(wave_index=leave_service.wave_index,
                                                 nodes=leave_service.path,
@@ -182,7 +194,7 @@ class RwaGame(object):
             # 如果已经把事件全部处理完，
             done = True
             observation = self.net.gen_img(self.img_width, self.img_height, None, None, self.mode)
-            print('已经走到尽头')
+            # print('已经走到尽头')
             return observation, reward, done, None
 
         # 第三，开始进行下一状态的处理。之前的处理中，时间和事件都已经推进到下一个单位了
@@ -194,7 +206,7 @@ class RwaGame(object):
             # TODO 处理当前时间点排在到达业务之前的离去业务，并将self.event_iter指向下一个要处理的事件
             while self.events[self.event_iter][2] is False and self.events[self.event_iter][0] == self.time:
                 leave_service = self.services[self.events[self.event_iter][1]]
-                print('process leave event')
+                # print('process leave event')
                 if hasattr(leave_service, 'path'):  # 如果该业务分配时候成功了
                     self.net.set_wave_state(wave_index=leave_service.wave_index,
                                             nodes=leave_service.path,
@@ -205,7 +217,7 @@ class RwaGame(object):
                 self.event_iter += 1
                 if self.event_iter == len(self.events):
                     # 如果已经把事件全部处理完，
-                    print('已经走到尽头')
+                    # print('已经走到尽头')
                     done = True
                     observation = self.net.gen_img(self.img_width, self.img_height, None, None, self.mode)
                     return observation, reward, done, None
@@ -238,10 +250,10 @@ class RwaGame(object):
         if action == self.NO_ACTION:
             if is_avai:
                 # 如果存在可分配的方案，但是选择了NO-ACTION
-                return -1
+                return ARRIVAL_OP_NO
             else:
                 # 如果不存在可分配的方案，选择了NO-ACTION
-                return 1
+                return ARRIVAL_NOOP_NO
         else:
             if is_avai:
                 route_index = action // (self.k*self.wave_num)
@@ -251,13 +263,13 @@ class RwaGame(object):
                     self.net.set_wave_state(wave_index=wave_index, nodes=path_list[route_index],
                                             state=False, check=True)
                     service.add_allocation(path_list[route_index], wave_index)
-                    return 1
+                    return ARRIVAL_OP_OT
                 else:
                     # 如果存在可分配方案，并且指定的分配方案是不可行的
-                    return -1
+                    return ARRIVAL_OP_NO
             else:
                 # 如果不存在可分配的方案，但是选择了非NO-ACTION的选项
-                return 0
+                return ARRIVAL_NOOP_OT
 
     def k_shortest_paths(self, source, target):
         """
