@@ -84,7 +84,7 @@ def main():
     """
     num_cls = args.wave_num * args.k + 1  # 所有的路由和波长选择组合，加上啥都不选
     action_shape = 1  # action的维度，默认是1.
-    num_updates = args.steps // args.workers // args.num_steps  # 梯度一共需要更新的次数
+    num_updates = int(args.steps) // args.workers // args.num_steps  # 梯度一共需要更新的次数
 
 
     # 解析weight
@@ -230,7 +230,7 @@ def main():
             end = time.time()
             interval = end - u_start
             remaining_seconds = (num_updates-updata_i-1) / args.log_interval * interval
-            remaining_hours = remaining_seconds // 3600
+            remaining_hours = int(remaining_seconds // 3600)
             remaining_minutes = int((remaining_seconds % 3600) / 60)
             total_num_steps = (updata_i+1) * args.workers * args.num_steps
 

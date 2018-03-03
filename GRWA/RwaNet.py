@@ -6,7 +6,7 @@ from PIL import Image
 import subprocess as sp
 
 
-file_prefix = "resources"
+file_prefix = "../resources"
 
 
 class RwaNetwork(nx.Graph):
