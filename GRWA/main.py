@@ -1,5 +1,5 @@
 import os
-from Service import RwaGame
+from Service import RwaGame, ARRIVAL_OP_OT
 from model import MobileNetV2, SimpleNet, AlexNet
 from subproc_env import SubprocEnv
 from storage import RolloutStorage
@@ -51,6 +51,8 @@ parser.add_argument('--img-height', type=int, default=224,
                     help="生成的网络灰度图的高度")
 parser.add_argument('--weight', type=str, default='None',
                     help='计算路由的时候，以什么属性为权重')
+parser.add_argument('--step-over', type=str, default='one_time',
+                    help="步进的模式，one_time表示每调用一次step，执行一个时间步骤；one_service表示每调用一次step，执行到下一个service到达的时候。")
 # RL算法相关参数
 parser.add_argument('--num-steps', type=int, default=5,
                     help='number of forward steps in A2C (default: 5)')
@@ -119,7 +121,7 @@ def main():
     # 创建游戏环境
     envs = [make_env(net_config=args.net, wave_num=args.wave_num, rou=args.rou, miu=args.miu,
                      max_iter=args.max_iter, k=args.k, mode=args.mode, img_width=args.img_width,
-                     img_height=args.img_height, weight=weight) for i in range(args.workers)]
+                     img_height=args.img_height, weight=weight, step_over=args.step_over) for i in range(args.workers)]
     envs = SubprocEnv(envs)
     # 创建游戏运行过程中相关变量存储更新的容器
     rollout = RolloutStorage(num_steps=args.num_steps, num_processes=args.workers,
@@ -139,7 +141,8 @@ def main():
         rollout.cuda()
 
     start = time.time()
-
+    total_services = 0  # log_interval期间一共有多少个业务到达
+    allocated_services = 0  # log_interval期间一共有多少个业务被分配成功
     for updata_i in range(num_updates):
         u_start = time.time()
         for step in range(args.num_steps):
@@ -153,6 +156,13 @@ def main():
             # 观察observation，以及下一个observation
             envs.step_async(cpu_actions)
             obs, reward, done, info = envs.step_wait()  # reward和done都是(n,)向量
+            allocated_services += (reward==ARRIVAL_OP_OT).sum()  # 计算分配成功的reward的次数
+            if args.step_over.startswith('one_time'):
+                total_services += (info==True).sum()  # 计算本次step中包含多少个业务到达事件
+            elif args.step_over.startswith('one_service'):
+                total_services += args.num_steps
+            else:
+                raise NotImplementedError
             reward = torch.from_numpy(np.expand_dims(reward, 1)).float()
             # print('reward is {}'.format(reward))
             episode_rewards += reward  # 累加reward分数
@@ -207,11 +217,13 @@ def main():
 
         # 事后一支烟
         rollout.after_update()
-
+        print("updates {} finished".format(updata_i))
+        print("total services is {}".format(total_services))
         # 存储模型
         if updata_i % args.save_interval == 0:
             save_path = os.path.join(args.save_dir, 'a2c')
             save_path = os.path.join(save_path, args.cnn)
+            save_path = os.path.join(save_path, args.step_over)
             if os.path.exists(save_path) and os.path.isdir(save_path):
                 pass
             else:
@@ -233,18 +245,23 @@ def main():
             remaining_hours = int(remaining_seconds // 3600)
             remaining_minutes = int((remaining_seconds % 3600) / 60)
             total_num_steps = (updata_i+1) * args.workers * args.num_steps
+            blocked_services = total_services - allocated_services
+            bp = blocked_services / total_services
 
-            print("Updates {}, num timesteps {}, FPS {}, mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}, entropy {:.5f}, value loss {:.5f}, policy loss {:.5f}, remaining time {}:{}".
-                format(updata_i, total_num_steps,
-                       int(total_num_steps / (end - start)),
-                       final_rewards.mean(),
-                       final_rewards.median(),
-                       final_rewards.min(),
-                       final_rewards.max(), cls_entropy.data[0],
-                       value_loss.data[0], action_loss.data[0],
-                       remaining_hours, remaining_minutes,)
+            print("Updates {}, num timesteps {}, FPS {}, mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}, entropy {:.5f}, value loss {:.5f}, policy loss {:.5f}, remaining time {}:{}, bp is {}/{}={}".
+                  format(updata_i, total_num_steps,
+                         int(total_num_steps / (end - start)),
+                         final_rewards.mean(),
+                         final_rewards.median(),
+                         final_rewards.min(),
+                         final_rewards.max(), cls_entropy.data[0],
+                         value_loss.data[0], action_loss.data[0],
+                         remaining_hours, remaining_minutes,
+                         blocked_services, total_services, bp)
                   )
             # raise NotImplementedError
+            total_services = 0
+            allocated_services = 0
 
     envs.close()
 
@@ -261,11 +278,11 @@ def update_current_obs(current_obs, obs):
 
 def make_env(net_config: str, wave_num: int, rou: float, miu: float,
              max_iter: int, k: int, mode: str, img_width: int, img_height: int,
-             weight):
+             weight, step_over):
     def _thunk():
         rwa_game = RwaGame(net_config=net_config, wave_num=wave_num, rou=rou, miu=miu,
                            max_iter=max_iter, k=k, mode=mode, img_width=img_width,
-                           img_height=img_height, weight=weight)
+                           img_height=img_height, weight=weight, step_over=step_over)
         return rwa_game
     return _thunk
 
@@ -285,7 +302,7 @@ def ksp(args, weight):
 
     envs = [make_env(net_config=args.net, wave_num=args.wave_num, rou=args.rou, miu=args.miu,
                      max_iter=args.max_iter*(i+1), k=args.k, mode=args.mode, img_width=args.img_width,
-                     img_height=args.img_height, weight=weight) for i in range(args.workers)]
+                     img_height=args.img_height, weight=weight, step_over=args.step_over) for i in range(args.workers)]
 
     envs = SubprocEnv(envs)
 

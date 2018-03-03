@@ -50,7 +50,7 @@ class RwaGame(object):
 
     def __init__(self, net_config: str, wave_num: int, rou: float, miu: float,
                  max_iter: int, k: int, mode: str, img_width: int, img_height: int,
-                 weight):
+                 weight, step_over: str='one_time'):
         """
 
         :param net_config: 网络配置文件
@@ -61,6 +61,7 @@ class RwaGame(object):
         :param mode: 模式，分为alg和learning两种，前者表示使用ksp+firstfit分配，后者表示使用rl算法学习
         :param img_width: 游戏界面的宽度
         :param img_height: 游戏界面的高度
+        :param step_over: 步进的模式，one_time表示每调用一次step，执行一个时间步骤；one_service表示每调用一次step，执行到下一个service到达的时候。
         """
         super(RwaGame, self).__init__()
         print('创建RWA Game')
@@ -86,6 +87,7 @@ class RwaGame(object):
         self.net = RwaNetwork(self.net_config, wave_num=self.wave_num)
         self.services = {}
         self.events = []  # time_point, service_index, is_arrival_event
+        self.step_over = step_over
 
     def gen_src_dst(self):
         nodes = list(self.net.nodes())
@@ -108,6 +110,8 @@ class RwaGame(object):
         self.net = RwaNetwork(self.net_config, wave_num=self.wave_num)
 
         base_time = 0
+        rand_val = int(random.random()*100000)
+        np.random.seed(rand_val)
         for base_index in range(self.max_iter):
             src, dst = self.gen_src_dst()
             arrival = np.random.poisson(lam=self.rou) + base_time + 1
@@ -137,7 +141,39 @@ class RwaGame(object):
 
     def step(self, action) -> [object, float, bool, dict]:
         """
-        在当前时间点self.time,执行行为action，获取reward，并且转向下一状态。
+        根据self.step_over的设置，执行不同的step操作
+        :param action:
+        :return:
+        """
+        if self.step_over.startswith('one_time'):
+            return self.step_one_time(action=action)
+        elif self.step_over.startswith('one_service'):
+            return self.step_one_service(action=action)
+
+    def step_one_service(self, action) -> [object, float, bool, dict]:
+        """
+        在当前业务点self.services，执行行为action，获取reward，并且转向下一个到达的service
+        :param action: 所采取的行为，默认是int类型。如果取值为-1，表示暂停游戏，游戏状态不发生变化
+        :return:
+        """
+        if action is -1:
+            return np.array([None, None]), 0, True, None
+
+        # 先处理当前到达的业务以及采取行为action获取的reward
+        obs, reward, done, info = self.step_one_time(action=action)
+        if done:
+            return obs, reward, done, info
+
+        while self.events[self.event_iter][0] > self.time:
+            # 如果下一个时间点没有到达的业务，则action选择No-Action。reward保持第一个action的reward，其他值跟随时间推进
+            obs, _, done, info = self.step_one_time(action=self.k * self.wave_num)
+            if done:
+                return obs, reward, done, info
+        return obs, reward, done, info
+
+    def step_one_time(self, action) -> [object, float, bool, dict]:
+        """
+        在当前时间点self.time,执行行为action，获取reward，并且转向下一个时间点。
         :param action: 所采取的行为，默认是int类型。如果取值为-1，表示暂停游戏，游戏状态不变化。
         :return:
         """
@@ -145,6 +181,7 @@ class RwaGame(object):
             return np.array([None, None]), 0, True, None
 
         done = False
+        info = False  # info表示本次是否处理业务到达事件
         # 首先，判断当前的处境，该时间点是否有业务到达或者离去，如果有，有几个
         # print('event id is: {}, total events is {}'.format(self.event_iter, len(self.events)))
         if self.events[self.event_iter][0] > self.time:
@@ -167,9 +204,15 @@ class RwaGame(object):
                 # 如果该时间点第一个事件是业务到达，则按照action选择处理
                 # print("process arrival event")
                 # print("event id is {}".format(self.event_iter))
+                info = True
                 ser = self.services[self.events[self.event_iter][1]]
                 reward = self.exec_action(action, ser)
-                # print("{}: service {} 's src and dst is {}, {}".format(id(ser), ser.index, ser.src, ser.dst))
+                # TODO 此处做一个有争议的决策，如果处理的到达业务是最后一个到达业务的话，则本游戏直接结束。因为后续只能是业务释放
+                if self.events[self.event_iter][1] == (self.max_iter-1):
+                    observation = self.net.gen_img(self.img_width, self.img_height, None, None, self.mode)
+                    done = True
+                    return observation, reward, done, info
+
                 self.event_iter += 1
                 while self.events[self.event_iter][0] == self.time:
                     # 该时间点处理完业务到达以后，后续还有业务离去事件(不可能同一个时间点有多个业务到达)
@@ -195,7 +238,7 @@ class RwaGame(object):
             done = True
             observation = self.net.gen_img(self.img_width, self.img_height, None, None, self.mode)
             # print('已经走到尽头')
-            return observation, reward, done, None
+            return observation, reward, done, info
 
         # 第三，开始进行下一状态的处理。之前的处理中，时间和事件都已经推进到下一个单位了
         if self.events[self.event_iter][0] > self.time:
@@ -220,7 +263,7 @@ class RwaGame(object):
                     # print('已经走到尽头')
                     done = True
                     observation = self.net.gen_img(self.img_width, self.img_height, None, None, self.mode)
-                    return observation, reward, done, None
+                    return observation, reward, done, info
 
             if self.events[self.event_iter][0] == self.time:
                 # 这时候只能是到达业务了，到达业务不可能是最后一个事件。
@@ -235,7 +278,7 @@ class RwaGame(object):
             # 如果该时间点之前还有没处理完的业务
             raise EnvironmentError("时间推进过程中，还有漏掉未处理的事件")
 
-        return observation, reward, done, None
+        return observation, reward, done, info
 
     def exec_action(self, action: int, service: Service) -> float:
         """
