@@ -110,3 +110,4 @@ val.txt
 log*
 *.tar
 tmp/
+*.ipynb
