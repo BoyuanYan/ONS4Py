@@ -217,7 +217,7 @@ def main():
 
         # 事后一支烟
         rollout.after_update()
-        print("updates {} finished".format(update_i))
+        print("updates {} finished".format(updata_i))
         print("total services is {}".format(total_services))
         # 存储模型
         if updata_i % args.save_interval == 0:
@@ -260,6 +260,8 @@ def main():
                          blocked_services, total_services, bp)
                   )
             # raise NotImplementedError
+            total_services = 0
+            allocated_services = 0
 
     envs.close()
 
