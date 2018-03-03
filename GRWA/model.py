@@ -89,20 +89,20 @@ class SimpleNet(FFPolicy):
         self.model = nn.Sequential(
             # nx224x224 --> 2nx112x112
             nn.Conv2d(in_channels=in_channels, out_channels=in_channels * mult[0], kernel_size=3, stride=2, padding=1),
-            nn.BatchNorm2d(num_features=in_channels * 1),
+            nn.BatchNorm2d(num_features=in_channels * mult[0]),
             nn.ReLU(inplace=True),
             # 2nx112x112 --> 3nx28x28
-            nn.Conv2d(in_channels=in_channels, out_channels=in_channels * 2, kernel_size=5, stride=4, padding=1),
-            nn.BatchNorm2d(num_features=in_channels * 2),
+            nn.Conv2d(in_channels=in_channels * mult[0], out_channels=in_channels * mult[1], kernel_size=5, stride=4, padding=1),
+            nn.BatchNorm2d(num_features=in_channels * mult[1]),
             nn.ReLU(inplace=True),
             # 3nx28x28 --> 4nx7x7
-            nn.Conv2d(in_channels=in_channels, out_channels=in_channels * 3, kernel_size=5, stride=4, padding=1),
-            nn.BatchNorm2d(num_features=in_channels * 3),
+            nn.Conv2d(in_channels=in_channels * mult[1], out_channels=in_channels * mult[2], kernel_size=5, stride=4, padding=1),
+            nn.BatchNorm2d(num_features=in_channels * mult[2]),
             nn.ReLU(inplace=True),
         )
-        self.num_nn = in_channels * 3 * 7 * 7
+        self.num_nn = in_channels * mult[2] * 7 * 7
         self.fc = nn.Sequential(
-            nn.Linear(in_features=in_channels * 3, out_features=1024, bias=True),
+            nn.Linear(in_features=in_channels * mult[2], out_features=1024, bias=True),
             nn.ReLU(inplace=True)
         )
 
