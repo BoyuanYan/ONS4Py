@@ -4,6 +4,7 @@ import numpy as np
 import graphviz as gz
 from PIL import Image
 import subprocess as sp
+import io
 
 
 file_prefix = "../resources"
@@ -65,9 +66,7 @@ class RwaNetwork(nx.Graph):
                         gz_graph.edge(edge[0], edge[1])
                     else:
                         gz_graph.edge(edge[0], edge[1], color='white')
-                gz_graph.render(png_name, cleanup=True)
-            for wave_index in range(self.wave_num):
-                img = Image.open(os.path.join(pid, str(wave_index)+'.png'))
+                img = Image.open(io.BytesIO(gz_graph.pipe()))  # 将gz_graph转化成RGB图像
                 img = img.convert('L')  # 转灰度
                 img = img.resize(size=(width, height))  # resize
                 img = np.array(img)  # convert to np.array
@@ -77,6 +76,7 @@ class RwaNetwork(nx.Graph):
                     rtn = np.concatenate((rtn, np.array(img)), axis=0)
                 else:
                     rtn = np.array(img)
+                
             return rtn
         else:
             raise ValueError("wrong mode parameter")
