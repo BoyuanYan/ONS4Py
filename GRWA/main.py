@@ -237,7 +237,7 @@ def main():
             remaining_minutes = int((remaining_seconds % 3600) / 60)
             total_num_steps = (updata_i+1) * args.workers * args.num_steps
             blocked_services = total_services - allocated_services
-            bp = total_services / total_services
+            bp = blocked_services / total_services
 
             print("Updates {}, num timesteps {}, FPS {}, mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}, entropy {:.5f}, value loss {:.5f}, policy loss {:.5f}, remaining time {}:{}, bp is {}/{}={}".
                   format(updata_i, total_num_steps,

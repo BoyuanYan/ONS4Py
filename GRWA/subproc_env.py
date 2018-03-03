@@ -72,14 +72,14 @@ class SubprocEnv(object):
         results = [remote.recv() for remote in self.remotes]
         self.waiting = False
         obs, rews, dones, infos = zip(*results)
-        return np.stack(obs), np.stack(rews), np.stack(dones), infos
+        return np.stack(obs), np.stack(rews), np.stack(dones), np.stack(infos)
 
     def reset(self):
         for remote in self.remotes:
             remote.send(('reset', None))
         results = [remote.recv() for remote in self.remotes]
         obs, rews, dones, infos = zip(*results)
-        return np.stack(obs), np.stack(rews), np.stack(dones), infos
+        return np.stack(obs), np.stack(rews), np.stack(dones), np.stack(infos)
 
     def exist_rw_allocation(self, path_list):
         """
