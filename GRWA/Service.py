@@ -145,6 +145,7 @@ class RwaGame(object):
             return np.array([None, None]), 0, True, None
 
         done = False
+        info = False  # info表示本次是否处理业务到达事件
         # 首先，判断当前的处境，该时间点是否有业务到达或者离去，如果有，有几个
         # print('event id is: {}, total events is {}'.format(self.event_iter, len(self.events)))
         if self.events[self.event_iter][0] > self.time:
@@ -167,9 +168,15 @@ class RwaGame(object):
                 # 如果该时间点第一个事件是业务到达，则按照action选择处理
                 # print("process arrival event")
                 # print("event id is {}".format(self.event_iter))
+                info = True
                 ser = self.services[self.events[self.event_iter][1]]
                 reward = self.exec_action(action, ser)
-                # print("{}: service {} 's src and dst is {}, {}".format(id(ser), ser.index, ser.src, ser.dst))
+                # TODO 此处做一个有争议的决策，如果处理的到达业务是最后一个到达业务的话，则本游戏直接结束。因为后续只能是业务释放
+                if self.events[self.event_iter][1] == (self.max_iter-1):
+                    observation = self.net.gen_img(self.img_width, self.img_height, None, None, self.mode)
+                    done = True
+                    return observation, reward, done, info
+
                 self.event_iter += 1
                 while self.events[self.event_iter][0] == self.time:
                     # 该时间点处理完业务到达以后，后续还有业务离去事件(不可能同一个时间点有多个业务到达)
@@ -195,7 +202,7 @@ class RwaGame(object):
             done = True
             observation = self.net.gen_img(self.img_width, self.img_height, None, None, self.mode)
             # print('已经走到尽头')
-            return observation, reward, done, None
+            return observation, reward, done, info
 
         # 第三，开始进行下一状态的处理。之前的处理中，时间和事件都已经推进到下一个单位了
         if self.events[self.event_iter][0] > self.time:
@@ -220,7 +227,7 @@ class RwaGame(object):
                     # print('已经走到尽头')
                     done = True
                     observation = self.net.gen_img(self.img_width, self.img_height, None, None, self.mode)
-                    return observation, reward, done, None
+                    return observation, reward, done, info
 
             if self.events[self.event_iter][0] == self.time:
                 # 这时候只能是到达业务了，到达业务不可能是最后一个事件。
@@ -235,7 +242,7 @@ class RwaGame(object):
             # 如果该时间点之前还有没处理完的业务
             raise EnvironmentError("时间推进过程中，还有漏掉未处理的事件")
 
-        return observation, reward, done, None
+        return observation, reward, done, info
 
     def exec_action(self, action: int, service: Service) -> float:
         """

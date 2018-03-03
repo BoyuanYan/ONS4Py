@@ -1,5 +1,5 @@
 import os
-from Service import RwaGame
+from Service import RwaGame, ARRIVAL_OP_OT
 from model import MobileNetV2, SimpleNet, AlexNet
 from subproc_env import SubprocEnv
 from storage import RolloutStorage
@@ -139,7 +139,8 @@ def main():
         rollout.cuda()
 
     start = time.time()
-
+    total_services = 0  # log_interval期间一共有多少个业务到达
+    allocated_services = 0  # log_interval期间一共有多少个业务被分配成功
     for updata_i in range(num_updates):
         u_start = time.time()
         for step in range(args.num_steps):
@@ -153,6 +154,8 @@ def main():
             # 观察observation，以及下一个observation
             envs.step_async(cpu_actions)
             obs, reward, done, info = envs.step_wait()  # reward和done都是(n,)向量
+            allocated_services += (reward==ARRIVAL_OP_OT).sum()  # 计算分配成功的reward的次数
+            total_services += (info==True).sum()  # 计算本次step中包含多少个业务到达事件
             reward = torch.from_numpy(np.expand_dims(reward, 1)).float()
             # print('reward is {}'.format(reward))
             episode_rewards += reward  # 累加reward分数
@@ -233,16 +236,19 @@ def main():
             remaining_hours = int(remaining_seconds // 3600)
             remaining_minutes = int((remaining_seconds % 3600) / 60)
             total_num_steps = (updata_i+1) * args.workers * args.num_steps
+            blocked_services = total_services - allocated_services
+            bp = total_services / total_services
 
-            print("Updates {}, num timesteps {}, FPS {}, mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}, entropy {:.5f}, value loss {:.5f}, policy loss {:.5f}, remaining time {}:{}".
-                format(updata_i, total_num_steps,
-                       int(total_num_steps / (end - start)),
-                       final_rewards.mean(),
-                       final_rewards.median(),
-                       final_rewards.min(),
-                       final_rewards.max(), cls_entropy.data[0],
-                       value_loss.data[0], action_loss.data[0],
-                       remaining_hours, remaining_minutes,)
+            print("Updates {}, num timesteps {}, FPS {}, mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}, entropy {:.5f}, value loss {:.5f}, policy loss {:.5f}, remaining time {}:{}, bp is {}/{}={}".
+                  format(updata_i, total_num_steps,
+                         int(total_num_steps / (end - start)),
+                         final_rewards.mean(),
+                         final_rewards.median(),
+                         final_rewards.min(),
+                         final_rewards.max(), cls_entropy.data[0],
+                         value_loss.data[0], action_loss.data[0],
+                         remaining_hours, remaining_minutes,
+                         blocked_services, total_services, bp)
                   )
             # raise NotImplementedError
 
