@@ -162,7 +162,7 @@ def main():
             if args.step_over.startswith('one_time'):
                 total_services += (info==True).sum()  # 计算本次step中包含多少个业务到达事件
             elif args.step_over.startswith('one_service'):
-                total_services += args.num_steps
+                total_services += args.workers
             else:
                 raise NotImplementedError
             reward = torch.from_numpy(np.expand_dims(reward, 1)).float()
