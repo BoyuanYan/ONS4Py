@@ -1,6 +1,6 @@
 import os
 from Service import RwaGame, ARRIVAL_OP_OT
-from model import MobileNetV2, SimpleNet, AlexNet, SqueezeNet
+from model import MobileNetV2, SimpleNet, AlexNet, SqueezeNet, SimplestNet
 from subproc_env import SubprocEnv
 from storage import RolloutStorage
 import argparse
@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument('--mode', type=str, default='alg',
                     help='RWA执行的模式，alg表示使用ksp+FirstFit，learning表示CNN学习模式, fcl表示FC学习模式，lstml表示LSTM学习模式')
 parser.add_argument('--cnn', type=str, default='mobilenetv2',
-                    help="用到的CNN网络，默认是mobilenetv2，还有simplenet，alexnet, squeeze的选择")
+                    help="用到的CNN网络，默认是mobilenetv2，还有simplenet，simplestnet, alexnet, squeeze的选择")
 parser.add_argument('--workers', type=int, default=16,
                     help='默认同步执行多少个游戏，默认值16')
 parser.add_argument('--steps', type=float, default=10e6,
@@ -105,6 +105,8 @@ def main():
             actor_critic = MobileNetV2(in_channels=args.wave_num, num_classes=num_cls, t=6)
         elif args.cnn.startswith('simplenet'):
             actor_critic = SimpleNet(in_channels=args.wave_num, num_classes=num_cls)
+        elif args.cnn.startswith('simplestnet'):
+            actor_critic = SimplestNet(in_channels=args.wave_num, num_classes=num_cls)
         elif args.cnn.startswith('alexnet'):
             actor_critic = AlexNet(in_channels=args.wave_num, num_classes=num_cls)
         elif args.cnn.startswith('squeezenet'):
