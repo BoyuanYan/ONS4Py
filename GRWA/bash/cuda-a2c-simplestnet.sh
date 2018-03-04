@@ -7,7 +7,7 @@
 #SBATCH -n1
 #SBATCH --job-name=a2c
 #SBATCH -o log-cuda-a2c-simplestnet-%j
-#SBATCH -w BJ-IDC1-10-10-16-81
+#SBATCH -w BJ-IDC1-10-10-16-82
 
 srun python -u ../main.py --mode learning --cnn simplestnet --num-steps 16 --cuda True \
 --net 6node.md --wave-num 10 --rou 8 --miu 300 --max-iter 300 \

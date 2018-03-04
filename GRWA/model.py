@@ -101,7 +101,7 @@ class SimplestNet(FFPolicy):
             nn.Conv2d(in_channels=in_channels * mult[1], out_channels=in_channels * mult[2], kernel_size=5, stride=4, padding=1),
             nn.BatchNorm2d(num_features=in_channels * mult[2]),
             nn.ReLU(inplace=True),
-            nn.AvgPool2d(7*7)
+            nn.AvgPool2d(7)
         )
         self.num_nn = in_channels * mult[2]
         self.fc = nn.Sequential(
