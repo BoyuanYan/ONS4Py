@@ -1,5 +1,4 @@
 from RwaNet import RwaNetwork
-from gym.spaces.discrete import Discrete
 import numpy as np
 from networkx import shortest_simple_paths
 import random
@@ -75,7 +74,6 @@ class RwaGame(object):
         self.erl = miu / rou
         self.max_iter = max_iter
         self.k = k
-        self.action_space = Discrete(k*wave_num+1)  # 最后一个值表示主动阻塞
         self.NO_ACTION = k*wave_num
         if mode in modes:
             self.mode = mode
