@@ -174,7 +174,7 @@ class RwaGame(object):
 
             if done:
                 return obs, reward, done, info
-        
+
         return obs, reward, done, info
 
     def step_one_time(self, action, obs_for_invalid_time: bool=True) -> [object, float, bool, dict]:
