@@ -32,6 +32,8 @@ parser.add_argument('--log-interval', type=int, default=10,
                     help='log interval, one log per n updates (default: 10)')
 parser.add_argument('--cuda', type=bool, default=False,
                     help="是否使用GPU进行运算。如果为True，表示在集群上进行运算，有分布式操作。")
+parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
+                    help='evaluate model')
 #  RWA相关参数
 parser.add_argument('--net', type=str, default='6node.md',
                     help="网络拓扑图，默认在resources目录下搜索")
@@ -121,6 +123,61 @@ def main():
         # 如果要使用cuda进行计算
         actor_critic.cuda()
         # actor_critic = DistModule(actor_critic)
+
+    # 判断是否是评估模式
+    if args.evaluate:
+        models = {}
+        times = 1
+        prefix = "trained_models"
+        directory = os.path.join(prefix, 'a2c', args.cnn, args.step_over)
+        env = RwaGame(net_config=args.net, wave_num=args.wave_num, rou=args.rou, miu=args.miu,
+                      max_iter=args.max_iter, k=args.k, mode=args.mode, img_width=args.img_width,
+                      img_height=args.img_height, weight=weight, step_over=args.step_over)
+
+        for model_file in os.listdir(directory):
+            model_file = os.path.join(directory, model_file)
+            params = torch.load(model_file)
+            actor_critic.load_state_dict(params['state_dict'])
+            optimizer.load_state_dict(params['optimizer'])
+            models[params['update_i']] = {}
+            for t in range(times):
+                total_reward, total_services, allocated_services = 0, 0, 0
+                obs, reward, done, info = env.reset()
+                while not done:
+                    inp = Variable(torch.Tensor(obs).unsqueeze(0), volatile=True)  # 禁止梯度更新
+                    value, action, action_log_prob = actor_critic.act(inputs=inp, deterministic=True)  # 确定性决策
+                    action = action.data.numpy()[0]
+                    obs, reward, done, info = env.step(action=action[0])
+                    total_reward += reward
+                    if reward == ARRIVAL_OP_OT:
+                        allocated_services += 1
+                    if args.step_over.startswith('one_time'):
+                        if info:
+                            total_services += 1
+                    elif args.step_over.startswith('one_service'):
+                        total_services += 1
+                    else:
+                        raise NotImplementedError
+                models[params['update_i']]['time'] = t
+                models[params['update_i']]['reward'] = total_reward
+                models[params['update_i']]['total_services'] = total_services
+                models[params['update_i']]['allocated_services'] = allocated_services
+                models[params['update_i']]['bp'] = (total_services-allocated_services)/total_services
+        # 输出仿真结果
+        print("|updated model|test index|reward|bp|total services|allocated services|")
+        print("|:-----|:-----|:-----|:-----|:-----|:-----|")
+        for m in sorted(models):
+            for i in range(times):
+                print("|{up}|{id}|{r}|{bp:.4f}|{ts}|{als}|".format(up=m,
+                                                                  id=models[m]['time'],
+                                                                  r=models[m]['reward'],
+                                                                  bp=models[m]['bp'],
+                                                                  ts=models[m]['total_services'],
+                                                                  als=models[m]['allocated_services']))
+        return
+
+
+
 
     # 创建游戏环境
     envs = [make_env(net_config=args.net, wave_num=args.wave_num, rou=args.rou, miu=args.miu,
