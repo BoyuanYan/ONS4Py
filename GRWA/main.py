@@ -202,10 +202,11 @@ def main():
         rollout.cuda()
 
     start = time.time()
+    log_start = time.time()
     total_services = 0  # log_interval期间一共有多少个业务到达
     allocated_services = 0  # log_interval期间一共有多少个业务被分配成功
     for updata_i in range(num_updates):
-        u_start = time.time()
+        update_start = time.time()
         for step in range(args.num_steps):
             # 选择行为
             inp = Variable(rollout.observations[step], volatile=True)  # 禁止梯度更新
@@ -278,7 +279,8 @@ def main():
 
         # 事后一支烟
         rollout.after_update()
-        print("updates {} finished".format(updata_i))
+        update_time = time.time() - update_start
+        print("updates {} finished, cost time {}:{}".format(updata_i, update_time//60, update_time % 60))
         print("total services is {}".format(total_services))
         # 存储模型
         if updata_i % args.save_interval == 0:
@@ -301,7 +303,7 @@ def main():
         # 输出日志
         if updata_i % args.log_interval == 0:
             end = time.time()
-            interval = end - u_start
+            interval = end - log_start
             remaining_seconds = (num_updates-updata_i-1) / args.log_interval * interval
             remaining_hours = int(remaining_seconds // 3600)
             remaining_minutes = int((remaining_seconds % 3600) / 60)
@@ -323,6 +325,7 @@ def main():
             # raise NotImplementedError
             total_services = 0
             allocated_services = 0
+            log_start = time.time()
 
     envs.close()
 

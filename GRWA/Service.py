@@ -154,6 +154,7 @@ class RwaGame(object):
         :param action: 所采取的行为，默认是int类型。如果取值为-1，表示暂停游戏，游戏状态不发生变化
         :return:
         """
+
         if action is -1:
             return np.array([None, None]), 0, True, None
 
@@ -161,18 +162,27 @@ class RwaGame(object):
         obs, reward, done, info = self.step_one_time(action=action)
         if done:
             return obs, reward, done, info
-
+        obs_none = 0
+        obs_times = 0
         while self.events[self.event_iter][0] > self.time:
             # 如果下一个时间点没有到达的业务，则action选择No-Action。reward保持第一个action的reward，其他值跟随时间推进
-            obs, _, done, info = self.step_one_time(action=self.k * self.wave_num)
+
+            obs, _, done, info = self.step_one_time(action=self.k * self.wave_num, obs_for_invalid_time=False)
+            obs_times += 1
+            if obs is None:
+                obs_none += 1
+
             if done:
                 return obs, reward, done, info
+        
         return obs, reward, done, info
 
-    def step_one_time(self, action) -> [object, float, bool, dict]:
+    def step_one_time(self, action, obs_for_invalid_time: bool=True) -> [object, float, bool, dict]:
         """
         在当前时间点self.time,执行行为action，获取reward，并且转向下一个时间点。
         :param action: 所采取的行为，默认是int类型。如果取值为-1，表示暂停游戏，游戏状态不变化。
+        :param obs_for_invalid_time: 表示如果下一个状态没有到达业务，即无用时间（invalid time），则无需生成obs图像返回。这样是为了在
+        step_one_service模式下，可以加快程序运行速度。不然运行速度会相差args.rou倍。
         :return:
         """
         if action is -1:
@@ -202,7 +212,7 @@ class RwaGame(object):
                 # 如果该时间点第一个事件是业务到达，则按照action选择处理
                 # print("process arrival event")
                 # print("event id is {}".format(self.event_iter))
-                info = True
+                info = True  # info中包含了本次action所处理的事件是否是业务到达事件
                 ser = self.services[self.events[self.event_iter][1]]
                 reward = self.exec_action(action, ser)
                 # TODO 此处做一个有争议的决策，如果处理的到达业务是最后一个到达业务的话，则本游戏直接结束。因为后续只能是业务释放
@@ -241,7 +251,10 @@ class RwaGame(object):
         # 第三，开始进行下一状态的处理。之前的处理中，时间和事件都已经推进到下一个单位了
         if self.events[self.event_iter][0] > self.time:
             # 如果该时间点没有到达或者离去的业务，则返回正常拓扑图
-            observation = self.net.gen_img(self.img_width, self.img_height, None, None, self.mode)
+            if obs_for_invalid_time:
+                observation = self.net.gen_img(self.img_width, self.img_height, None, None, self.mode)
+            else:
+                observation = None
         elif self.events[self.event_iter][0] == self.time:
             # 如果该时间点恰巧有业务到达或者离去
             # TODO 处理当前时间点排在到达业务之前的离去业务，并将self.event_iter指向下一个要处理的事件
@@ -271,7 +284,12 @@ class RwaGame(object):
                 observation = self.net.gen_img(self.img_width, self.img_height, src, dst, self.mode)
             else:
                 # 表示下一个时间点没有到达业务事件
-                observation = self.net.gen_img(self.img_width, self.img_height, None, None, self.mode)
+                if obs_for_invalid_time:
+                    # 如果需要没有到达业务时间点的图像
+                    observation = self.net.gen_img(self.img_width, self.img_height, None, None, self.mode)
+                else:
+                    # 如果不需要没有到达业务时间点的图像
+                    observation = None
         else:
             # 如果该时间点之前还有没处理完的业务
             raise EnvironmentError("时间推进过程中，还有漏掉未处理的事件")
