@@ -3,7 +3,6 @@ from Service import RwaGame, ARRIVAL_OP_OT
 from model import MobileNetV2, SimpleNet, AlexNet, SqueezeNet, SimplestNet
 from subproc_env import SubprocEnv
 from storage import RolloutStorage
-import argparse
 import time
 import random
 import numpy as np
@@ -12,73 +11,9 @@ import torch.optim as optim
 import torch.nn as nn
 from torch.autograd import Variable
 # from distributed_utils import dist_init, average_gradients, DistModule
+from args import args
 
-parser = argparse.ArgumentParser(
-    description='GRWA Training')
 
-parser.add_argument('--mode', type=str, default='alg',
-                    help='RWA执行的模式，alg表示使用ksp+FirstFit，learning表示CNN学习模式, fcl表示FC学习模式，lstml表示LSTM学习模式')
-parser.add_argument('--cnn', type=str, default='mobilenetv2',
-                    help="用到的CNN网络，默认是mobilenetv2，还有simplenet，simplestnet, alexnet, squeeze的选择")
-parser.add_argument('--workers', type=int, default=16,
-                    help='默认同步执行多少个游戏，默认值16')
-parser.add_argument('--steps', type=float, default=10e6,
-                    help="所有游戏进程的训练总共要进行的步骤数")
-parser.add_argument('--save-dir', default='./trained_models/',
-                    help='directory to save agent logs (default: ./trained_models/)')
-parser.add_argument('--save-interval', type=int, default=100,
-                    help='save interval, one save per n updates (default: 100)')
-parser.add_argument('--log-interval', type=int, default=10,
-                    help='log interval, one log per n updates (default: 10)')
-parser.add_argument('--cuda', type=bool, default=False,
-                    help="是否使用GPU进行运算。如果为True，表示在集群上进行运算，有分布式操作。")
-parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
-                    help='evaluate model')
-#  RWA相关参数
-parser.add_argument('--net', type=str, default='6node.md',
-                    help="网络拓扑图，默认在resources目录下搜索")
-parser.add_argument('--wave-num', type=int, default=10,
-                    help='拓扑中每条链路的波长数')
-parser.add_argument('--rou', type=int, default=5,
-                    help='业务到达的平均间隔，泊松分布')
-parser.add_argument('--miu', type=int, default=100,
-                    help='业务持续的平均时间，泊松分布')
-parser.add_argument('--max-iter', type=int, default=1000,
-                    help='一次episode中，分配的业务数量')
-parser.add_argument('--k', type=int, default=1,
-                    help='RWA算法中，采取ksp计算路由的k值')
-parser.add_argument('--img-width', type=int, default=224,
-                    help="生成的网络灰度图的宽度")
-parser.add_argument('--img-height', type=int, default=224,
-                    help="生成的网络灰度图的高度")
-parser.add_argument('--weight', type=str, default='None',
-                    help='计算路由的时候，以什么属性为权重')
-parser.add_argument('--step-over', type=str, default='one_time',
-                    help="步进的模式，one_time表示每调用一次step，执行一个时间步骤；one_service表示每调用一次step，执行到下一个service到达的时候。")
-# RL算法相关参数
-parser.add_argument('--num-steps', type=int, default=5,
-                    help='number of forward steps in A2C (default: 5)')
-parser.add_argument('--base-lr', type=float, default=7e-4,
-                    help='起始learning rate值')
-parser.add_argument('--lr-adjust', type=str, default='constant',
-                    help='learning rate的调整策略，包括constant，exp，linear')
-parser.add_argument('--alpha', type=float, default=0.99,
-                    help='RMSprop optimizer apha (default: 0.99)')
-parser.add_argument('--epsilon', type=float, default=1e-5,
-                    help='RMSprop optimizer epsilon (default: 1e-5)')
-parser.add_argument('--max-grad-norm', type=float, default=0.5,
-                    help='max norm of gradients (default: 0.5)')
-
-parser.add_argument('--entropy-coef', type=float, default=0.01,
-                    help='entropy term coefficient (default: 0.01)')
-parser.add_argument('--value-loss-coef', type=float, default=0.5,
-                    help='value loss coefficient (default: 0.5)')
-parser.add_argument('--gamma', type=float, default=0.99,
-                    help='discount factor for rewards (default: 0.99)')
-parser.add_argument('--use-gae', type=bool, default=False,
-                    help='https://github.com/ikostrikov/pytorch-a2c-ppo-acktr/issues/49')
-
-args = parser.parse_args()
 
 
 def main():

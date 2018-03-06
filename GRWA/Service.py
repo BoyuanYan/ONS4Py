@@ -2,9 +2,11 @@ from RwaNet import RwaNetwork
 import numpy as np
 from networkx import shortest_simple_paths
 import random
-
+from args import args
 
 modes = ['alg', 'learning']
+
+
 
 # 重新开启一轮游戏
 INIT = 0
@@ -15,8 +17,8 @@ NOARRIVAL_OT    =   0  # 选择其他RW选项
 ARRIVAL_NOOP_NO =   1  # 选择No-Action
 ARRIVAL_NOOP_OT =   0  # 选择其他RW选项
 # 该时间点有业务到达（可能同时有业务离去），并且有可达RW选项
-ARRIVAL_OP_OT   =  10  # 选择可达的RW选项
-ARRIVAL_OP_NO   =  -5  # 选择不可达或者No-Action
+ARRIVAL_OP_OT   = args.reward  # 选择可达的RW选项
+ARRIVAL_OP_NO   = args.punish  # 选择不可达或者No-Action
 
 
 class Service(object):
@@ -30,6 +32,7 @@ class Service(object):
         self.leave_time = leave_time
 
     def add_allocation(self, path: list, wave_index: int):
+
         self.path = path
         self.wave_index = wave_index
 

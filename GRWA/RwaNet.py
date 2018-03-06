@@ -5,7 +5,7 @@ import graphviz as gz
 from PIL import Image
 import subprocess as sp
 import io
-
+from networkx import shortest_simple_paths
 
 file_prefix = "../resources"
 
@@ -14,15 +14,22 @@ class RwaNetwork(nx.Graph):
     """
     RWA network
     """
-    def __init__(self, filename: str, wave_num: int):
+    def __init__(self, filename: str, wave_num: int, append_route: bool=False, k: int=1, weight=None,
+                 file_prefix=file_prefix):
         """
 
         :param filename: 标明网络的md文件，其中前两行是表头和md表格的标志“|:---|”，内容为index，src，dst，weight
         :param wave_num: 每条链路包含的波长个数
+        :param append_route: 在生成网络图像的时候，是否把路由信息也加进去
+        :param k: 如果加路由信息，则加几个路由
         """
         super(RwaNetwork, self).__init__()
         self.net_name = filename.split('.')[0]
         self.wave_num = wave_num
+        self.append_route = append_route
+        if append_route:
+            self.k = k
+            self.weight = weight
         filepath = os.path.join(file_prefix, filename)
         if os.path.isfile(filepath):
             datas = np.loadtxt(filepath, delimiter='|', skiprows=2, dtype=str)
@@ -72,10 +79,79 @@ class RwaNetwork(nx.Graph):
                     rtn = np.concatenate((rtn, np.array(img)), axis=0)
                 else:
                     rtn = np.array(img)
+            # 判断是否将路由信息也放进去
+            # if self.append_route:
+                # 需要确定src和dst都不是None。这就表明只有在one_service的时候才能用append_route
+                # assert src is not None
+                # assert dst is not None
+                # path_list = self.k_shortest_paths(src, dst)
+                # imgs = []
+                #
+                # # 把全局网络加入：
+                # r_graph = gz.Graph(format='png', engine='neato')
+                # r_graph.attr('node', shape='point', fixedsize='true', height='0.1', width='0.1',
+                #              label='')
+                # for node in self.nodes():
+                #     r_graph.node(name=node)
+                # for edge in self.edges():
+                #     r_graph.edge(edge[0], edge[1])
+                # img = Image.open(io.BytesIO(r_graph.pipe()))  # 将gz_graph转化成RGB图像
+                # # img = img.convert('L')  # 转灰度
+                # img = img.resize(size=(width, height))  # resize
+                # imgs.append(img)
+                # # TODO 未完成 确实还尚未完成，因为发现图像对应的结果不对。
+                # for path in path_list:
+                #     start_node = path[0]
+                #     r_graph = gz.Graph(format='png', engine='neato')
+                #     r_graph.attr('node', shape='point', fixedsize='true', height='0.1', width='0.1',
+                #                   label='', color='red')
+                #     for node in self.nodes():
+                #         r_graph.node(name=node)
+                #
+                #     for edge in self.edges():
+                #         r_graph.edge(edge[0], edge[1], color='red')
+                #     r_graph.node(start_node, color='black')
+                #     for i in range(1, len(path)):
+                #         dst = path[i]
+                #         r_graph.node(dst, color='black')
+                #         try:
+                #             r_graph.body.remove('\t' + start_node + ' -- ' + dst)
+                #             r_graph.body.remove('\t' + dst + ' -- ' + start_node)
+                #
+                #         r_graph.edge(start_node, dst, color='black')
+                #         start_node = dst
+                #     # r_graph.render("test"+str(path))
+                #     img = Image.open(io.BytesIO(r_graph.pipe()))  # 将gz_graph转化成RGB图像
+                #     # img = img.convert('L')  # 转灰度
+                #     img = img.resize(size=(width, height))  # resize
+                #     imgs.append(img)
+                # return imgs
+
+
+
 
             return rtn
         else:
             raise ValueError("wrong mode parameter")
+
+    def k_shortest_paths(self, source, target):
+        """
+        如果源宿点是None，则返回len为1的None数组
+        :param source:
+        :param target:
+        :return:
+        """
+        if source is None:
+            return [None]
+        generator = shortest_simple_paths(self, source, target, weight=self.weight)
+        rtn = []
+        index = 0
+        for i in generator:
+            index += 1
+            if index > self.k:
+                break
+            rtn.append(i)
+        return rtn
 
     def set_wave_state(self, wave_index, nodes: list, state: bool, check: bool=True):
         """
