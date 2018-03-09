@@ -3,6 +3,7 @@ import numpy as np
 from networkx import shortest_simple_paths
 import random
 from args import args
+import utils
 
 modes = ['alg', 'learning']
 
@@ -12,10 +13,10 @@ modes = ['alg', 'learning']
 INIT = 0
 # 该时间点没有业务到达，可能有业务离去（取决于事件排序）
 NOARRIVAL_NO    =   1  # 选择No-Action
-NOARRIVAL_OT    =   0  # 选择其他RW选项
+NOARRIVAL_OT    =  -1  # 选择其他RW选项
 # 该时间点有业务到达（可能同时有业务离去），但是没有可达RW选项
-ARRIVAL_NOOP_NO =   1  # 选择No-Action
-ARRIVAL_NOOP_OT =   0  # 选择其他RW选项
+ARRIVAL_NOOP_NO =   args.punish  # 选择No-Action
+ARRIVAL_NOOP_OT =   args.punish  # 选择其他RW选项
 # 该时间点有业务到达（可能同时有业务离去），并且有可达RW选项
 ARRIVAL_OP_OT   = args.reward  # 选择可达的RW选项
 ARRIVAL_OP_NO   = args.punish  # 选择不可达或者No-Action
@@ -162,7 +163,8 @@ class RwaGame(object):
             return np.array([None, None]), 0, True, None
 
         # 先处理当前到达的业务以及采取行为action获取的reward
-        obs, reward, done, info = self.step_one_time(action=action)
+        # 下一步如果没有到达业务，则这一步的obs为None。相关的处理在下面while里面有判断
+        obs, reward, done, info = self.step_one_time(action=action, obs_for_invalid_time=False)
         if done:
             return obs, reward, done, info
         obs_none = 0
@@ -253,10 +255,12 @@ class RwaGame(object):
 
         # 第三，开始进行下一状态的处理。之前的处理中，时间和事件都已经推进到下一个单位了
         if self.events[self.event_iter][0] > self.time:
-            # 如果该时间点没有到达或者离去的业务，则返回正常拓扑图
+            # 如果该时间点没有到达或者离去的业务
             if obs_for_invalid_time:
+                # 如果要求返回无效时间的拓扑图像
                 observation = self.net.gen_img(self.img_width, self.img_height, None, None, self.mode)
             else:
+                # 如果不要求返回无效时间的拓扑图像
                 observation = None
         elif self.events[self.event_iter][0] == self.time:
             # 如果该时间点恰巧有业务到达或者离去

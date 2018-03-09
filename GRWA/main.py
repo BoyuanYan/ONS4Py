@@ -12,6 +12,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 # from distributed_utils import dist_init, average_gradients, DistModule
 from args import args
+from utils import save_on_disk
 
 
 
@@ -24,6 +25,10 @@ def main():
     num_cls = args.wave_num * args.k + 1  # 所有的路由和波长选择组合，加上啥都不选
     action_shape = 1  # action的维度，默认是1.
     num_updates = int(args.steps) // args.workers // args.num_steps  # 梯度一共需要更新的次数
+    if args.append_route:
+        channel_num = args.wave_num+args.k
+    else:
+        channel_num = args.wave_num
 
 
     # 解析weight
@@ -37,17 +42,17 @@ def main():
         return
     elif args.mode.startswith('learning'):
         # CNN学习模式下，osb的shape应该是CHW
-        obs_shape = (args.wave_num, args.img_height, args.img_width)
+        obs_shape = (channel_num, args.img_height, args.img_width)
         if args.cnn.startswith('mobilenetv2'):
-            actor_critic = MobileNetV2(in_channels=args.wave_num, num_classes=num_cls, t=6)
+            actor_critic = MobileNetV2(in_channels=channel_num, num_classes=num_cls, t=6)
         elif args.cnn.startswith('simplenet'):
-            actor_critic = SimpleNet(in_channels=args.wave_num, num_classes=num_cls)
+            actor_critic = SimpleNet(in_channels=channel_num, num_classes=num_cls)
         elif args.cnn.startswith('simplestnet'):
-            actor_critic = SimplestNet(in_channels=args.wave_num, num_classes=num_cls)
+            actor_critic = SimplestNet(in_channels=channel_num, num_classes=num_cls)
         elif args.cnn.startswith('alexnet'):
-            actor_critic = AlexNet(in_channels=args.wave_num, num_classes=num_cls)
+            actor_critic = AlexNet(in_channels=channel_num, num_classes=num_cls)
         elif args.cnn.startswith('squeezenet'):
-            actor_critic = SqueezeNet(in_channels=args.wave_num, num_classes=num_cls, version=1.0)
+            actor_critic = SqueezeNet(in_channels=channel_num, num_classes=num_cls, version=1.0)
         else:
             raise NotImplementedError
         optimizer = optim.RMSprop(actor_critic.parameters(), lr=args.base_lr, eps=args.epsilon, alpha=args.alpha)
@@ -125,7 +130,7 @@ def main():
     current_obs = torch.zeros(args.workers, *obs_shape)
 
     observation, _, _, _ = envs.reset()
-    update_current_obs(current_obs, observation)
+    update_current_obs(current_obs, observation, channel_num)
 
     rollout.observations[0].copy_(current_obs)
     # These variables are used to compute average rewards for all processes.
@@ -148,11 +153,9 @@ def main():
             value, action, action_log_prob = actor_critic.act(inputs=inp, deterministic=False)
             # 压缩维度，放到cpu上执行。因为没有用到GPU，所以并没有什么卵用，权当提示
             cpu_actions = action.data.squeeze(1).cpu().numpy()
-            # actor_critic.act 得到的是action变量，需要将其转换成one_hot形式
-            # one_hot_action = torch.zeros(action.size()[0], num_cls).scatter_(1, action.data, 1)
             # 观察observation，以及下一个observation
             envs.step_async(cpu_actions)
-            obs, reward, done, info = envs.step_wait()  # reward和done都是(n,)向量
+            obs, reward, done, info = envs.step_wait()  # reward和done都是(n,)的numpy.ndarray向量
             allocated_services += (reward==ARRIVAL_OP_OT).sum()  # 计算分配成功的reward的次数
             if args.step_over.startswith('one_time'):
                 total_services += (info==True).sum()  # 计算本次step中包含多少个业务到达事件
@@ -175,7 +178,7 @@ def main():
 
             # 给masks扩充2个维度，与current_obs相乘。则运行结束的游戏进程对应的obs值会变成0，图像上表示全黑，即游戏结束的画面。
             current_obs *= masks.unsqueeze(2).unsqueeze(2)
-            update_current_obs(current_obs=current_obs, obs=obs)
+            update_current_obs(current_obs=current_obs, obs=obs, channel_num=channel_num)
             # print("final_rewards is {}".format(final_rewards))
             # print("mask is {}".format(masks))
             # 把本步骤得到的结果存储起来
@@ -265,14 +268,14 @@ def main():
     envs.close()
 
 
-def update_current_obs(current_obs, obs):
+def update_current_obs(current_obs, obs, channel_num):
     """
     全部更新当前的变量（不太明白源代码中为什么这么写？可能是跟fps有关吧，不能保证num_stack为抓取间隔）
     :param current_obs: 当前的observation
     :param obs: 要更新的observation
     """
     obs = torch.from_numpy(obs).float()
-    current_obs[:, -args.wave_num:] = obs
+    current_obs[:, -channel_num:] = obs
 
 
 def make_env(net_config: str, wave_num: int, rou: float, miu: float,
@@ -345,6 +348,7 @@ def ksp(args, weight):
         print("rank {}: 一共{}条业务，其中分配成功{}条，分配失败{}条，阻塞率{:.4f}".format(i, total, succ_count[i],
                                                                     fail_count[i], fail_count[i]/total))
         print("reward是：{}".format(rewards_count[i]))
+
 
 
 if __name__ == "__main__":

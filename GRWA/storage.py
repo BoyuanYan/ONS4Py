@@ -5,7 +5,7 @@ class RolloutStorage(object):
 
     def __init__(self, num_steps: int, num_processes: int, obs_shape: tuple, action_shape: int):
         """
-
+        存储形式是[steps，workers, Channels, Height, Width]
         :param num_steps: 进行一次训练所需要游戏进行的步骤数
         :param num_processes: 同时运行的游戏进程数
         :param obs_shape: observation space的shape

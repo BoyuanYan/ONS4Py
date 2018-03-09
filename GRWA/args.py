@@ -21,10 +21,18 @@ parser.add_argument('--cuda', type=bool, default=False,
                     help="是否使用GPU进行运算。如果为True，表示在集群上进行运算，有分布式操作。")
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model')
-parser.add_argument('--reward', type=int, default=10,
+parser.add_argument('--reward', type=int, default=1,
                     help='业务到达的时候，执行分配成功的奖励')
-parser.add_argument('--punish', type=int, default=-5,
+parser.add_argument('--punish', type=int, default=-1,
                     help='业务到达的时候，执行分配失败的惩罚')
+parser.add_argument('--dpi', type=int, default=72,
+                    help="生成图像的dpi")
+parser.add_argument('--line-width', type=float, default=1,
+                    help="链路的粗细")
+parser.add_argument('--node-size', type=float, default=0.1,
+                    help="节点的大小")
+parser.add_argument('--append-route', type=bool, default=True,
+                    help="是否将路由信息作为一个维度附加到图片中去")
 #  RWA相关参数
 parser.add_argument('--net', type=str, default='6node.md',
                     help="网络拓扑图，默认在resources目录下搜索")

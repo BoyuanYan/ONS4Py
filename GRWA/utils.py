@@ -3,7 +3,10 @@ import torch.nn as nn
 import subprocess as sp
 import matplotlib.pyplot as plt
 import os
+from PIL import Image
+import numpy as np
 
+file_prefix = "../resources"
 
 def parse_log(file):
     """
@@ -21,3 +24,20 @@ def parse_log(file):
         tmp = tmp.split('=')[1]
         y.append(float(tmp))
     plt.plot(y)
+
+
+def save_on_disk(stacked_data: np.ndarray, out_dir: str = 'test_visiable'):
+    """
+
+    :param stacked_data:归一化以后的叠加灰度图，格式仍然是CHW
+    :param out_dir: 图像输出的目录
+    :return:
+    """
+    print("shape of image is {}".format(stacked_data.shape))
+    for channel in range(stacked_data.shape[0]):
+        data = stacked_data[channel, :, :].squeeze()
+        data = data * 255
+        data = data.astype(np.uint8)
+        img = Image.fromarray(data, mode='L')
+        saved = os.path.join(out_dir, str(channel)+".png")
+        img.save(saved)

@@ -6,15 +6,16 @@ from PIL import Image
 import subprocess as sp
 import io
 from networkx import shortest_simple_paths
-
-file_prefix = "../resources"
+from utils import file_prefix
+from draw import PltRwa
+from args import args
 
 
 class RwaNetwork(nx.Graph):
     """
     RWA network
     """
-    def __init__(self, filename: str, wave_num: int, append_route: bool=False, k: int=1, weight=None,
+    def __init__(self, filename: str, wave_num: int, append_route: bool=args.append_route, k: int=args.k, weight=None,
                  file_prefix=file_prefix):
         """
 
@@ -41,6 +42,9 @@ class RwaNetwork(nx.Graph):
                               is_wave_avai=wave_avai)
         else:
             raise FileExistsError("file {} doesn't exists.".format(filepath))
+        self.draw = PltRwa(img_width=args.img_width, img_height=args.img_height, dpi=args.dpi,
+                           line_width=args.line_width, node_size=args.node_size, net_name=filename,
+                           prefix=file_prefix)
 
     def gen_img(self, width: int, height: int, src: str, dst: str, mode: str) -> np.ndarray:
         """
@@ -56,79 +60,18 @@ class RwaNetwork(nx.Graph):
         elif mode.startswith('learning'):
             rtn = None
             for wave_index in range(self.wave_num):
-                gz_graph = gz.Graph(format='png', engine='neato')
-                gz_graph.attr('node', shape='point', fixedsize='true', height='0.1', width='0.1', label='')
-                gz_graph.attr('edge')
-                for node in self.nodes():
-                    gz_graph.node(name=node)
-                if src and dst:  # 如果src和dst都不是None
-                    gz_graph.node(name=src, shape='triangle', height='0.2', width='0.2')
-                    gz_graph.node(name=dst, shape='triangle', height='0.2', width='0.2')
-                for edge in self.edges():
-                    if self.get_edge_data(edge[0], edge[1])['is_wave_avai'][wave_index]:
-                        gz_graph.edge(edge[0], edge[1])
-                    else:
-                        gz_graph.edge(edge[0], edge[1], color='white')
-                img = Image.open(io.BytesIO(gz_graph.pipe()))  # 将gz_graph转化成RGB图像
-                img = img.convert('L')  # 转灰度
-                img = img.resize(size=(width, height))  # resize
-                img = np.array(img)  # convert to np.array
-                img = img / 255.0  # 归一化到[0-1]
-                img = img[np.newaxis, :]  # add 1 dimension for channel
+                img = self.draw.draw(self, src, dst, None, wave_index)
+
                 if rtn is not None:
-                    rtn = np.concatenate((rtn, np.array(img)), axis=0)
+                    rtn = np.concatenate((rtn, img), axis=0)
                 else:
                     rtn = np.array(img)
-            # 判断是否将路由信息也放进去
-            # if self.append_route:
-                # 需要确定src和dst都不是None。这就表明只有在one_service的时候才能用append_route
-                # assert src is not None
-                # assert dst is not None
-                # path_list = self.k_shortest_paths(src, dst)
-                # imgs = []
-                #
-                # # 把全局网络加入：
-                # r_graph = gz.Graph(format='png', engine='neato')
-                # r_graph.attr('node', shape='point', fixedsize='true', height='0.1', width='0.1',
-                #              label='')
-                # for node in self.nodes():
-                #     r_graph.node(name=node)
-                # for edge in self.edges():
-                #     r_graph.edge(edge[0], edge[1])
-                # img = Image.open(io.BytesIO(r_graph.pipe()))  # 将gz_graph转化成RGB图像
-                # # img = img.convert('L')  # 转灰度
-                # img = img.resize(size=(width, height))  # resize
-                # imgs.append(img)
-                # # TODO 未完成 确实还尚未完成，因为发现图像对应的结果不对。
-                # for path in path_list:
-                #     start_node = path[0]
-                #     r_graph = gz.Graph(format='png', engine='neato')
-                #     r_graph.attr('node', shape='point', fixedsize='true', height='0.1', width='0.1',
-                #                   label='', color='red')
-                #     for node in self.nodes():
-                #         r_graph.node(name=node)
-                #
-                #     for edge in self.edges():
-                #         r_graph.edge(edge[0], edge[1], color='red')
-                #     r_graph.node(start_node, color='black')
-                #     for i in range(1, len(path)):
-                #         dst = path[i]
-                #         r_graph.node(dst, color='black')
-                #         try:
-                #             r_graph.body.remove('\t' + start_node + ' -- ' + dst)
-                #             r_graph.body.remove('\t' + dst + ' -- ' + start_node)
-                #
-                #         r_graph.edge(start_node, dst, color='black')
-                #         start_node = dst
-                #     # r_graph.render("test"+str(path))
-                #     img = Image.open(io.BytesIO(r_graph.pipe()))  # 将gz_graph转化成RGB图像
-                #     # img = img.convert('L')  # 转灰度
-                #     img = img.resize(size=(width, height))  # resize
-                #     imgs.append(img)
-                # return imgs
-
-
-
+            # TODO 默认将路由信息也放进去
+            if src is not None and dst is not None:
+                paths = self.k_shortest_paths(src, dst)
+                for nodes in paths:
+                    img = self.draw.draw(self, src, dst, nodes, -1)
+                    rtn = np.concatenate((rtn, img), axis=0)
 
             return rtn
         else:
