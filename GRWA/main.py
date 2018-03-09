@@ -1,3 +1,5 @@
+from matplotlib import use
+use('Agg')
 import os
 from Service import RwaGame, ARRIVAL_OP_OT
 from model import MobileNetV2, SimpleNet, AlexNet, SqueezeNet, SimplestNet
@@ -164,9 +166,7 @@ def main():
             else:
                 raise NotImplementedError
             reward = torch.from_numpy(np.expand_dims(reward, 1)).float()
-            # print('reward is {}'.format(reward))
             episode_rewards += reward  # 累加reward分数
-            # print("episode reward is {}".format(episode_rewards))
             # 如果游戏结束，则重新开始计算episode_rewards和final_rewards，并且以返回的reward为初始值重新进行累加。
             masks = torch.FloatTensor([[0.0] if d else [1.0] for d in done])  # True --> 0, False --> 1
             final_rewards *= masks
@@ -179,8 +179,6 @@ def main():
             # 给masks扩充2个维度，与current_obs相乘。则运行结束的游戏进程对应的obs值会变成0，图像上表示全黑，即游戏结束的画面。
             current_obs *= masks.unsqueeze(2).unsqueeze(2)
             update_current_obs(current_obs=current_obs, obs=obs, channel_num=channel_num)
-            # print("final_rewards is {}".format(final_rewards))
-            # print("mask is {}".format(masks))
             # 把本步骤得到的结果存储起来
             rollout.insert(step=step, current_obs=current_obs, action=action.data, action_log_prob=action_log_prob.data,
                            value_pred=value.data, reward=reward, mask=masks)
@@ -219,7 +217,7 @@ def main():
         rollout.after_update()
         update_time = time.time() - update_start
         print("updates {} finished, cost time {}:{}".format(updata_i, update_time//60, update_time % 60))
-        print("total services is {}".format(total_services))
+        # print("total services is {}".format(total_services))
         # 存储模型
         if updata_i % args.save_interval == 0:
             save_path = os.path.join(args.save_dir, 'a2c')

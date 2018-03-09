@@ -5,8 +5,10 @@ import matplotlib.pyplot as plt
 import os
 from PIL import Image
 import numpy as np
+from args import args
 
-file_prefix = "../resources"
+file_prefix = args.file_prefix
+
 
 def parse_log(file):
     """

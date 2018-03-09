@@ -86,24 +86,20 @@ class SimplestNet(FFPolicy):
     """
     def __init__(self, in_channels: int=3, num_classes=1000):
         super(SimplestNet, self).__init__()
-        mult = [1, 2, 3]
+        mult = [32, 32]
         print('build simplenet with in_channel {}, and out_channel {}'.format(in_channels, num_classes))
         self.model = nn.Sequential(
-            # nx224x224 --> 2nx112x112
-            nn.Conv2d(in_channels=in_channels, out_channels=in_channels * mult[0], kernel_size=3, stride=2, padding=1),
-            nn.BatchNorm2d(num_features=in_channels * mult[0]),
-            nn.ReLU(inplace=True),
             # 2nx112x112 --> 3nx28x28
-            nn.Conv2d(in_channels=in_channels * mult[0], out_channels=in_channels * mult[1], kernel_size=5, stride=4, padding=1),
-            nn.BatchNorm2d(num_features=in_channels * mult[1]),
+            nn.Conv2d(in_channels=in_channels, out_channels=mult[0], kernel_size=5, stride=4, padding=1),
+            nn.BatchNorm2d(num_features=mult[0]),
             nn.ReLU(inplace=True),
             # 3nx28x28 --> 4nx7x7
-            nn.Conv2d(in_channels=in_channels * mult[1], out_channels=in_channels * mult[2], kernel_size=5, stride=4, padding=1),
-            nn.BatchNorm2d(num_features=in_channels * mult[2]),
+            nn.Conv2d(in_channels=mult[0], out_channels=mult[1], kernel_size=5, stride=4, padding=1),
+            nn.BatchNorm2d(num_features=mult[1]),
             nn.ReLU(inplace=True),
             nn.AvgPool2d(7)
         )
-        self.num_nn = in_channels * mult[2]
+        self.num_nn = mult[1]
         self.fc = nn.Sequential(
             nn.Linear(in_features=self.num_nn, out_features=256, bias=True),
             nn.ReLU(inplace=True)
@@ -126,34 +122,37 @@ class SimplestNet(FFPolicy):
 class SimpleNet(FFPolicy):
     """
     非常简单的网络，为了能够在自己的破电脑上也能运行程序，我也是拼了
+    224x224已经改成112x112
     """
 
     def __init__(self, in_channels: int=3, num_classes=1000):
         super(SimpleNet, self).__init__()
-        mult = [1, 2, 3]
+        mult = [32, 32, 64]
         print('build simplenet with in_channel {}, and out_channel {}'.format(in_channels, num_classes))
         self.model = nn.Sequential(
-            # nx224x224 --> 2nx112x112
-            nn.Conv2d(in_channels=in_channels, out_channels=in_channels * mult[0], kernel_size=3, stride=2, padding=1),
-            nn.BatchNorm2d(num_features=in_channels * mult[0]),
+            # x112x112 --> x56x56
+            nn.Conv2d(in_channels=in_channels, out_channels=mult[0], kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(num_features=mult[0]),
             nn.ReLU(inplace=True),
-            # 2nx112x112 --> 3nx28x28
-            nn.Conv2d(in_channels=in_channels * mult[0], out_channels=in_channels * mult[1], kernel_size=5, stride=4, padding=1),
-            nn.BatchNorm2d(num_features=in_channels * mult[1]),
+            # x56x56 --> x28x28
+            nn.Conv2d(in_channels=mult[0], out_channels=mult[1], kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(num_features=mult[1]),
             nn.ReLU(inplace=True),
-            # 3nx28x28 --> 4nx7x7
-            nn.Conv2d(in_channels=in_channels * mult[1], out_channels=in_channels * mult[2], kernel_size=5, stride=4, padding=1),
-            nn.BatchNorm2d(num_features=in_channels * mult[2]),
+            # x28x28 --> x7x7
+            nn.Conv2d(in_channels=mult[1], out_channels=mult[2], kernel_size=5, stride=4, padding=1),
+            nn.BatchNorm2d(num_features=mult[2]),
             nn.ReLU(inplace=True),
+            # pooling --> x1x1
+            nn.AvgPool2d(7)
         )
-        self.num_nn = in_channels * mult[2] * 7 * 7
+        self.num_nn = mult[2]
         self.fc = nn.Sequential(
-            nn.Linear(in_features=self.num_nn, out_features=1024, bias=True),
+            nn.Linear(in_features=self.num_nn, out_features=512, bias=True),
             nn.ReLU(inplace=True)
         )
 
-        self.critic_linear = nn.Linear(1024, 1)
-        self.cls_linear = Categorical(1024, num_classes)  # classification 分类器
+        self.critic_linear = nn.Linear(512, 1)
+        self.cls_linear = Categorical(512, num_classes)  # classification 分类器
 
         self.train()  # 设置成训练模式
         self.apply(weights_init)  # 初始化相关参数

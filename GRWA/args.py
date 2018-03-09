@@ -33,6 +33,8 @@ parser.add_argument('--node-size', type=float, default=0.1,
                     help="节点的大小")
 parser.add_argument('--append-route', type=bool, default=True,
                     help="是否将路由信息作为一个维度附加到图片中去")
+parser.add_argument('--file-prefix', type=str, default="resources",
+                    help="resources目录的相对位置，默认是resources")
 #  RWA相关参数
 parser.add_argument('--net', type=str, default='6node.md',
                     help="网络拓扑图，默认在resources目录下搜索")
