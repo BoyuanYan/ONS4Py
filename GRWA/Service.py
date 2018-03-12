@@ -100,6 +100,31 @@ class RwaGame(object):
             dst_index = random.randint(0, len(nodes)-1)
         return nodes[src_index], nodes[dst_index]
 
+    def again(self):
+        """
+        清空所有的状态缓存，将环境重置回开始之前的状态，但是业务序列不变
+        :return:
+        """
+        self.event_iter = 0
+        self.time = 0
+        ss = {}
+        self.events = []
+        self.net = RwaNetwork(self.net_config, wave_num=self.wave_num)
+
+        for val in self.services.values():
+            serv = Service(val.index, val.src, val.dst, val.arrival_time, val.leave_time)
+            ss[val.index] = serv
+        self.services = ss
+
+        # 返回第一个业务请求的状态
+        src, dst = self.services[0].src, self.services[0].dst
+        observation = self.net.gen_img(self.img_width, self.img_height, src, dst, self.mode)
+        reward = INIT
+        done = False
+        info = None
+        self.time = self.services[0].arrival_time
+        return observation, reward, done, info
+
     def reset(self):
         """
         reset environment

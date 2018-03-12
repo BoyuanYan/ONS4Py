@@ -35,6 +35,10 @@ parser.add_argument('--append-route', type=bool, default=True,
                     help="是否将路由信息作为一个维度附加到图片中去")
 parser.add_argument('--file-prefix', type=str, default="resources",
                     help="resources目录的相对位置，默认是resources")
+# 模型对比相关参数
+parser.add_argument('--comp', type=str, default="None",
+                    help="在ModelCompare.py脚本中，进行模型对比的参数，默认是None，即不进行对比；选项还有states和random")
+
 #  RWA相关参数
 parser.add_argument('--net', type=str, default='6node.md',
                     help="网络拓扑图，默认在resources目录下搜索")

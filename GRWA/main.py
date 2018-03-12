@@ -123,9 +123,6 @@ def main():
                                                                   als=models[params['update_i']]['allocated_services']))
         return
 
-
-
-
     # 创建游戏环境
     envs = [make_env(net_config=args.net, wave_num=args.wave_num, rou=args.rou, miu=args.miu,
                      max_iter=args.max_iter, k=args.k, mode=args.mode, img_width=args.img_width,
