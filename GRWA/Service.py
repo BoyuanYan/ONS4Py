@@ -112,7 +112,7 @@ class RwaGame(object):
         self.net = RwaNetwork(self.net_config, wave_num=self.wave_num)
 
         base_time = 0
-        rand_val = int(random.random()*100000)
+        rand_val = int(random.random()*1000000000)
         np.random.seed(rand_val)
         for base_index in range(self.max_iter):
             src, dst = self.gen_src_dst()

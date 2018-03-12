@@ -68,6 +68,7 @@ def main():
 
     # 判断是否是评估模式
     if args.evaluate:
+        print("evaluate mode")
         models = {}
         times = 1
         prefix = "trained_models"
@@ -76,12 +77,16 @@ def main():
                       max_iter=args.max_iter, k=args.k, mode=args.mode, img_width=args.img_width,
                       img_height=args.img_height, weight=weight, step_over=args.step_over)
 
-        for model_file in os.listdir(directory):
+        for model_file in reversed(sorted(os.listdir(directory), key=lambda item: int(item.split('.')[0]))):
             model_file = os.path.join(directory, model_file)
+            print("evaluate model {}".format(model_file))
             params = torch.load(model_file)
             actor_critic.load_state_dict(params['state_dict'])
-            optimizer.load_state_dict(params['optimizer'])
+            actor_critic.eval()
+
             models[params['update_i']] = {}
+
+            print("model loading is finished")
             for t in range(times):
                 total_reward, total_services, allocated_services = 0, 0, 0
                 obs, reward, done, info = env.reset()
@@ -106,16 +111,16 @@ def main():
                 models[params['update_i']]['allocated_services'] = allocated_services
                 models[params['update_i']]['bp'] = (total_services-allocated_services)/total_services
         # 输出仿真结果
-        print("|updated model|test index|reward|bp|total services|allocated services|")
-        print("|:-----|:-----|:-----|:-----|:-----|:-----|")
-        for m in sorted(models):
+        # print("|updated model|test index|reward|bp|total services|allocated services|")
+        # print("|:-----|:-----|:-----|:-----|:-----|:-----|")
+        # for m in sorted(models):
             for i in range(times):
-                print("|{up}|{id}|{r}|{bp:.4f}|{ts}|{als}|".format(up=m,
-                                                                  id=models[m]['time'],
-                                                                  r=models[m]['reward'],
-                                                                  bp=models[m]['bp'],
-                                                                  ts=models[m]['total_services'],
-                                                                  als=models[m]['allocated_services']))
+                print("|{up}|{id}|{r}|{bp:.4f}|{ts}|{als}|".format(up=params['update_i'],
+                                                                  id=models[params['update_i']]['time'],
+                                                                  r=models[params['update_i']]['reward'],
+                                                                  bp=models[params['update_i']]['bp'],
+                                                                  ts=models[params['update_i']]['total_services'],
+                                                                  als=models[params['update_i']]['allocated_services']))
         return
 
 
