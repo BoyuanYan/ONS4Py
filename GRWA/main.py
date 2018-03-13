@@ -2,7 +2,7 @@ from matplotlib import use
 use('Agg')
 import os
 from Service import RwaGame, ARRIVAL_OP_OT
-from model import MobileNetV2, SimpleNet, AlexNet, SqueezeNet, SimplestNet
+from model import MobileNetV2, SimpleNet, AlexNet, SqueezeNet, SimplestNet, ExpandSimpleNet
 from subproc_env import SubprocEnv
 from storage import RolloutStorage
 import time
@@ -55,6 +55,8 @@ def main():
             actor_critic = AlexNet(in_channels=channel_num, num_classes=num_cls)
         elif args.cnn.startswith('squeezenet'):
             actor_critic = SqueezeNet(in_channels=channel_num, num_classes=num_cls, version=1.0)
+        elif args.cnn.startswith('expandsimplenet'):
+            actor_critic = ExpandSimpleNet(in_channels=channel_num, num_classes=num_cls, expand_factor=args.expand_factor)
         else:
             raise NotImplementedError
         optimizer = optim.RMSprop(actor_critic.parameters(), lr=args.base_lr, eps=args.epsilon, alpha=args.alpha)

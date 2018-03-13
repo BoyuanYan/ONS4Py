@@ -1,3 +1,5 @@
+from matplotlib import use
+use('Agg')
 from args import args
 import os
 from model import MobileNetV2, SimpleNet, AlexNet, SqueezeNet, SimplestNet
@@ -83,8 +85,8 @@ def random_comp(times: int=1):
         print("model loading is finished")
         for t in range(times):
             total_reward, total_services, allocated_services = 0, 0, 0
-            obs, reward, done, info = env.reset()
             env.mode = "learning"
+            obs, reward, done, info = env.reset()
             while not done:
                 inp = Variable(torch.Tensor(obs).unsqueeze(0), volatile=True)  # 禁止梯度更新
                 value, action, action_log_prob = actor_critic.act(inputs=inp, deterministic=True)  # 确定性决策
@@ -104,9 +106,9 @@ def random_comp(times: int=1):
             print("{}: allocated services is {}, total services is {}, bp is {}"
                   .format(model_file, allocated_services,total_services, bp))
             # 开始计算ksp算法的对应结果
+            env.mode = "alg"
             total_reward, total_services, allocated_services = 0, 0, 0
             obs, reward, done, info = env.again()
-            env.mode = "alg"
             while not done:
                 path_list = env.net.k_shortest_paths(obs[0], obs[1])
                 exist, path_index, wave_index = env.net.exist_rw_allocation(path_list)

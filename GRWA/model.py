@@ -119,6 +119,52 @@ class SimplestNet(FFPolicy):
         return self.critic_linear(x), x
 
 
+class ExpandSimpleNet(FFPolicy):
+    """
+    SImpleNet的扩展网络，扩展方向在深度上
+    """
+
+    def __init__(self, in_channels: int=3, num_classes=1000, expand_factor: int=2):
+        super(ExpandSimpleNet, self).__init__()
+        mult = [32, 32, 64] * expand_factor
+        print('build expandsimplenet with in_channel {}, and out_channel {}'.format(in_channels, num_classes))
+        self.model = nn.Sequential(
+            # x112x112 --> x56x56
+            nn.Conv2d(in_channels=in_channels, out_channels=mult[0], kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(num_features=mult[0]),
+            nn.ReLU(inplace=True),
+            # x56x56 --> x28x28
+            nn.Conv2d(in_channels=mult[0], out_channels=mult[1], kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(num_features=mult[1]),
+            nn.ReLU(inplace=True),
+            # x28x28 --> x7x7
+            nn.Conv2d(in_channels=mult[1], out_channels=mult[2], kernel_size=5, stride=4, padding=1),
+            nn.BatchNorm2d(num_features=mult[2]),
+            nn.ReLU(inplace=True),
+            # pooling --> x1x1
+            nn.AvgPool2d(7)
+        )
+        self.num_nn = mult[2]
+        self.fc = nn.Sequential(
+            nn.Linear(in_features=self.num_nn, out_features=512, bias=True),
+            nn.ReLU(inplace=True)
+        )
+
+        self.critic_linear = nn.Linear(512, 1)
+        self.cls_linear = Categorical(512, num_classes)  # classification 分类器
+
+        self.train()  # 设置成训练模式
+        self.apply(weights_init)  # 初始化相关参数
+
+    def forward(self, inputs):
+        x = self.model(inputs)
+        x = x.view(-1, self.num_nn)
+        x = self.fc(x)
+
+        return self.critic_linear(x), x
+
+
+
 class SimpleNet(FFPolicy):
     """
     非常简单的网络，为了能够在自己的破电脑上也能运行程序，我也是拼了

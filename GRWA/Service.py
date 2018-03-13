@@ -108,7 +108,6 @@ class RwaGame(object):
         self.event_iter = 0
         self.time = 0
         ss = {}
-        self.events = []
         self.net = RwaNetwork(self.net_config, wave_num=self.wave_num)
 
         for val in self.services.values():
