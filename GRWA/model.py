@@ -238,7 +238,7 @@ class DeeperSimpleNet(FFPolicy):
             nn.Conv2d(in_channels=mult[1], out_channels=mult[2], kernel_size=3, stride=2, padding=1),
             nn.BatchNorm2d(num_features=mult[2]),
             nn.ReLU(inplace=True),
-            nn.Conv2d(in_channels=mult[2], out_channels=mult[2], kernel_size=3, stride=2, padding=1),
+            nn.Conv2d(in_channels=mult[2], out_channels=mult[2], kernel_size=3, stride=1, padding=0),
             nn.BatchNorm2d(num_features=mult[2]),
             nn.ReLU(inplace=True),
             # x14x14 --> x7x7
