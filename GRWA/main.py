@@ -2,7 +2,7 @@ from matplotlib import use
 use('Agg')
 import os
 from Service import RwaGame, ARRIVAL_OP_OT
-from model import MobileNetV2, SimpleNet, AlexNet, SqueezeNet, SimplestNet, ExpandSimpleNet
+from model import MobileNetV2, SimpleNet, AlexNet, SqueezeNet, SimplestNet, ExpandSimpleNet, DeeperSimpleNet
 from subproc_env import SubprocEnv
 from storage import RolloutStorage
 import time
@@ -57,9 +57,18 @@ def main():
             actor_critic = SqueezeNet(in_channels=channel_num, num_classes=num_cls, version=1.0)
         elif args.cnn.startswith('expandsimplenet'):
             actor_critic = ExpandSimpleNet(in_channels=channel_num, num_classes=num_cls, expand_factor=args.expand_factor)
+        elif args.cnn.startswith('deepersimplenet'):
+            actor_critic = DeeperSimpleNet(in_channels=channel_num, num_classes=num_cls, expand_factor=args.expand_factor)
         else:
             raise NotImplementedError
-        optimizer = optim.RMSprop(actor_critic.parameters(), lr=args.base_lr, eps=args.epsilon, alpha=args.alpha)
+
+        # 创建optimizer
+        if args.algo.startswith("a2c"):
+            optimizer = optim.RMSprop(actor_critic.parameters(), lr=args.base_lr, eps=args.epsilon, alpha=args.alpha)
+        elif args.algo.startswith("ppo"):
+            optimizer = optim.Adam(actor_critic.parameters(), lr=args.base_lr, eps=args.epsilon)
+        else:
+            raise NotImplementedError
     else:
         raise NotImplementedError
 
@@ -192,30 +201,37 @@ def main():
         next_value = actor_critic(next_inp)[0].data  # 获取下一步的value值
         rollout.compute_returns(next_value=next_value, use_gae=False, gamma=args.gamma, tau=None)
 
-        # 下面进行A2C算法梯度更新
-        inps = Variable(rollout.observations[:-1].view(-1, *obs_shape))
-        acts = Variable(rollout.actions.view(-1, action_shape))
+        if args.algo.startswith('a2c'):
+            # 下面进行A2C算法梯度更新
+            inps = Variable(rollout.observations[:-1].view(-1, *obs_shape))
+            acts = Variable(rollout.actions.view(-1, action_shape))
 
-        # print("a2cs's acts size is {}".format(acts.size()))
-        value, action_log_probs, cls_entropy = actor_critic.evaluate_actions(inputs=inps, actions=acts)
+            # print("a2cs's acts size is {}".format(acts.size()))
+            value, action_log_probs, cls_entropy = actor_critic.evaluate_actions(inputs=inps, actions=acts)
 
-        # print("inputs' shape is {}".format(inps.size()))
-        # print("value's shape is {}".format(value.size()))
-        value = value.view(args.num_steps, args.workers, 1)
-        # print("action_log_probs's shape is {}".format(action_log_probs.size()))
-        action_log_probs = action_log_probs.view(args.num_steps, args.workers, 1)
-        # 计算loss
-        advantages = Variable(rollout.returns[:-1]) - value
-        value_loss = advantages.pow(2).mean()  # L2Loss or MSE Loss
-        action_loss = -(Variable(advantages.data) * action_log_probs).mean()
-        total_loss = value_loss * args.value_loss_coef + action_loss - cls_entropy * args.entropy_coef
+            # print("inputs' shape is {}".format(inps.size()))
+            # print("value's shape is {}".format(value.size()))
+            value = value.view(args.num_steps, args.workers, 1)
+            # print("action_log_probs's shape is {}".format(action_log_probs.size()))
+            action_log_probs = action_log_probs.view(args.num_steps, args.workers, 1)
+            # 计算loss
+            advantages = Variable(rollout.returns[:-1]) - value
+            value_loss = advantages.pow(2).mean()  # L2Loss or MSE Loss
+            action_loss = -(Variable(advantages.data) * action_log_probs).mean()
+            total_loss = value_loss * args.value_loss_coef + action_loss - cls_entropy * args.entropy_coef
 
-        optimizer.zero_grad()
-        total_loss.backward()
-        # 下面进行迷之操作。。梯度裁剪（https://www.cnblogs.com/lindaxin/p/7998196.html）
-        nn.utils.clip_grad_norm(actor_critic.parameters(), args.max_grad_norm)
-        # average_gradients(actor_critic)
-        optimizer.step()
+            optimizer.zero_grad()
+            total_loss.backward()
+            # 下面进行迷之操作。。梯度裁剪（https://www.cnblogs.com/lindaxin/p/7998196.html）
+            nn.utils.clip_grad_norm(actor_critic.parameters(), args.max_grad_norm)
+            # average_gradients(actor_critic)
+            optimizer.step()
+        elif args.algo.startswith('ppo'):
+            # 下面进行PPO算法梯度更新
+            # TODO
+            pass
+        else:
+            raise NotImplementedError
 
         # 事后一支烟
         rollout.after_update()

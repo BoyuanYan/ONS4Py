@@ -121,7 +121,7 @@ class SimplestNet(FFPolicy):
 
 class ExpandSimpleNet(FFPolicy):
     """
-    SImpleNet的扩展网络，扩展方向在深度上
+    SImpleNet的扩展网络，扩展方向在广度上
     """
 
     def __init__(self, in_channels: int=3, num_classes=1000, expand_factor: int=2):
@@ -187,6 +187,66 @@ class SimpleNet(FFPolicy):
             # x28x28 --> x7x7
             nn.Conv2d(in_channels=mult[1], out_channels=mult[2], kernel_size=5, stride=4, padding=1),
             nn.BatchNorm2d(num_features=mult[2]),
+            nn.ReLU(inplace=True),
+            # pooling --> x1x1
+            nn.AvgPool2d(7)
+        )
+        self.num_nn = mult[2]
+        self.fc = nn.Sequential(
+            nn.Linear(in_features=self.num_nn, out_features=512, bias=True),
+            nn.ReLU(inplace=True)
+        )
+
+        self.critic_linear = nn.Linear(512, 1)
+        self.cls_linear = Categorical(512, num_classes)  # classification 分类器
+
+        self.train()  # 设置成训练模式
+        self.apply(weights_init)  # 初始化相关参数
+
+    def forward(self, inputs):
+        x = self.model(inputs)
+        x = x.view(-1, self.num_nn)
+        x = self.fc(x)
+
+        return self.critic_linear(x), x
+
+
+class DeeperSimpleNet(FFPolicy):
+    """
+    SimpleNet的深度扩展
+    """
+    def __init__(self, in_channels: int=3, num_classes=1000, expand_factor: int=2):
+        super(DeeperSimpleNet, self).__init__()
+        mult = [32, 32, 64, 128] * expand_factor
+        print('build deepersimplenet with in_channel {}, and out_channel {}'.format(in_channels, num_classes))
+        self.model = nn.Sequential(
+            # x112x112 --> x56x56
+            nn.Conv2d(in_channels=in_channels, out_channels=mult[0], kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(num_features=mult[0]),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels=mult[0], out_channels=mult[0], kernel_size=3, stride=1, padding=0),
+            nn.BatchNorm2d(num_features=mult[0]),
+            nn.ReLU(inplace=True),
+            # x56x56 --> x28x28
+            nn.Conv2d(in_channels=mult[0], out_channels=mult[1], kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(num_features=mult[1]),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels=mult[1], out_channels=mult[1], kernel_size=3, stride=1, padding=0),
+            nn.BatchNorm2d(num_features=mult[1]),
+            nn.ReLU(inplace=True),
+            # x28x28 --> x14x14
+            nn.Conv2d(in_channels=mult[1], out_channels=mult[2], kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(num_features=mult[2]),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels=mult[2], out_channels=mult[2], kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(num_features=mult[2]),
+            nn.ReLU(inplace=True),
+            # x14x14 --> x7x7
+            nn.Conv2d(in_channels=mult[2], out_channels=mult[3], kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(num_features=mult[3]),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels=mult[3], out_channels=mult[3], kernel_size=3, stride=1, padding=0),
+            nn.BatchNorm2d(num_features=mult[3]),
             nn.ReLU(inplace=True),
             # pooling --> x1x1
             nn.AvgPool2d(7)

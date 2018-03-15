@@ -5,8 +5,10 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument('--mode', type=str, default='alg',
                     help='RWA执行的模式，alg表示使用ksp+FirstFit，learning表示CNN学习模式, fcl表示FC学习模式，lstml表示LSTM学习模式')
+parser.add_argument('--algo', type=str, default='a2c',
+                    help="a2c, ppo, acktr, default a2c")
 parser.add_argument('--cnn', type=str, default='mobilenetv2',
-                    help="用到的CNN网络，默认是mobilenetv2，还有simplenet，simplestnet, expandsimplenet,  alexnet, squeeze的选择")
+                    help="用到的CNN网络，默认是mobilenetv2，还有simplenet，simplestnet, expandsimplenet, deepersimplenet,  alexnet, squeeze的选择")
 parser.add_argument('--workers', type=int, default=16,
                     help='默认同步执行多少个游戏，默认值16')
 parser.add_argument('--steps', type=float, default=10e6,
@@ -84,5 +86,11 @@ parser.add_argument('--use-gae', type=bool, default=False,
                     help='https://github.com/ikostrikov/pytorch-a2c-ppo-acktr/issues/49')
 parser.add_argument('--expand-factor', type=int, default=2,
                     help="expandsimplenet的横向扩张系数，默认是2")
+parser.add_argument('--ppo-epoch', type=int, default=4,
+                    help='number of ppo epochs (default: 4)')
+parser.add_argument('--num-mini-batch', type=int, default=32,
+                    help='number of batches for ppo (default: 32)')
+parser.add_argument('--clip-param', type=float, default=0.2,
+                    help='ppo clip parameter (default: 0.2)')
 
 args = parser.parse_args()
