@@ -237,8 +237,34 @@ def main():
             optimizer.step()
         elif args.algo.startswith('ppo'):
             # 下面进行PPO算法梯度更新
-            # TODO
-            pass
+            advantages = rollout.returns[:-1] - rollout.value_preds[:-1]
+            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
+            for e in range(args.ppo_epoch):
+                data_generator = rollout.feed_forward_generator(advantages,
+                                                                args.num_mini_batch)
+
+                for sample in data_generator:
+                    observations_batch, actions_batch, \
+                    return_batch, masks_batch, old_action_log_probs_batch, \
+                    adv_targ = sample
+
+                    # Reshape to do in a single forward pass for all steps
+                    values, action_log_probs, dist_entropy, states = actor_critic.evaluate_actions(
+                        Variable(observations_batch),
+                        Variable(actions_batch))
+
+                    adv_targ = Variable(adv_targ)
+                    ratio = torch.exp(action_log_probs - Variable(old_action_log_probs_batch))
+                    surr1 = ratio * adv_targ
+                    surr2 = torch.clamp(ratio, 1.0 - args.clip_param, 1.0 + args.clip_param) * adv_targ
+                    action_loss = -torch.min(surr1, surr2).mean()  # PPO's pessimistic surrogate (L^CLIP)
+
+                    value_loss = (Variable(return_batch) - values).pow(2).mean()
+
+                    optimizer.zero_grad()
+                    (value_loss + action_loss - dist_entropy * args.entropy_coef).backward()
+                    nn.utils.clip_grad_norm(actor_critic.parameters(), args.max_grad_norm)
+                    optimizer.step()
         else:
             raise NotImplementedError
 
