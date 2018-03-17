@@ -160,7 +160,16 @@ def main():
     log_start = time.time()
     total_services = 0  # log_interval期间一共有多少个业务到达
     allocated_services = 0  # log_interval期间一共有多少个业务被分配成功
-    for updata_i in range(num_updates):
+
+    # 判断是否是接续之前的训练
+    if args.resume:
+        pms = torch.load(args.resume)
+        actor_critic.load_state_dict(pms['state_dict'])
+        optimizer.load_state_dict(pms['optimizer'])
+        update_begin = pms['updata_i']
+        print("resume process from update_i {}, with base_lr {}".format(update_begin, args.base_lr))
+
+    for updata_i in range(update_begin, num_updates):
         update_start = time.time()
         for step in range(args.num_steps):
             # 选择行为
