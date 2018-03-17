@@ -249,9 +249,9 @@ class DeeperSimpleNet(FFPolicy):
             nn.BatchNorm2d(num_features=mult[3]),
             nn.ReLU(inplace=True),
             # pooling --> x1x1
-            nn.AvgPool2d(7)
+            nn.AvgPool2d(4)
         )
-        self.num_nn = mult[2]
+        self.num_nn = mult[3]
         self.fc = nn.Sequential(
             nn.Linear(in_features=self.num_nn, out_features=512, bias=True),
             nn.ReLU(inplace=True)
