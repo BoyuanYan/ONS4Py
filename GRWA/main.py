@@ -166,7 +166,7 @@ def main():
         pms = torch.load(args.resume)
         actor_critic.load_state_dict(pms['state_dict'])
         optimizer.load_state_dict(pms['optimizer'])
-        update_begin = pms['updata_i']
+        update_begin = pms['update_i']
         print("resume process from update_i {}, with base_lr {}".format(update_begin, args.base_lr))
 
     for updata_i in range(update_begin, num_updates):
