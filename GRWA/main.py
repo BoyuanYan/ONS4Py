@@ -160,6 +160,7 @@ def main():
     log_start = time.time()
     total_services = 0  # log_interval期间一共有多少个业务到达
     allocated_services = 0  # log_interval期间一共有多少个业务被分配成功
+    update_begin = 0
 
     # 判断是否是接续之前的训练
     if args.resume:
@@ -249,7 +250,7 @@ def main():
                     adv_targ = sample
 
                     # Reshape to do in a single forward pass for all steps
-                    values, action_log_probs, dist_entropy, states = actor_critic.evaluate_actions(
+                    values, action_log_probs, cls_entropy = actor_critic.evaluate_actions(
                         Variable(observations_batch),
                         Variable(actions_batch))
 
@@ -261,12 +262,6 @@ def main():
 
                     value_loss = (Variable(return_batch) - values).pow(2).mean()
 
-                    optimizer.zero_grad()
-                    (value_loss + action_loss - dist_entropy * args.entropy_coef).backward()
-                    nn.utils.clip_grad_norm(actor_critic.parameters(), args.max_grad_norm)
-                    optimizer.step()
-        else:
-            raise NotImplementedError
 
         # 事后一支烟
         rollout.after_update()
