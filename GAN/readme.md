@@ -2,8 +2,9 @@
 
 > prepare for ECOC 2018
 
-#### 场景
-有些攻击者成功入侵控制器以后，需要潜伏下来以待时机。而此时面对越来越先进的入侵检测技术，如何在潜伏期避免被控制器发觉对攻击者来说是关键的问题。
+#### code
+clone from https://github.com/goodfeli/adversarial, which is the first work about GAN.
+
 
 #### Generative Adversarial Networks
 生成对抗网络，是机器学习中的一种生成模型算法，用于模拟真实数据的联合概率分布，以达到以假乱真的效果
