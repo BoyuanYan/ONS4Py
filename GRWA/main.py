@@ -206,6 +206,10 @@ def main():
             rollout.insert(step=step, current_obs=current_obs, action=action.data, action_log_prob=action_log_prob.data,
                            value_pred=value.data, reward=reward, mask=masks)
 
+        # TODO 强行停止
+        # envs.close()
+        # return
+
         # 注意不要引用上述for循环定义的变量。下面变量的命名和使用都要注意。
         next_inp = Variable(rollout.observations[-1], volatile=True)  # 禁止梯度更新
         next_value = actor_critic(next_inp)[0].data  # 获取下一步的value值

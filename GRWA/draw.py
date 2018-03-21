@@ -11,7 +11,8 @@ from PIL import Image
 
 
 file_map = {
-    "6node.md": "6node_layout.md"
+    "6node.md": "6node_layout.md",
+    "NSFNET.md": "NSFNET_layout.md"
 }
 
 
@@ -61,7 +62,7 @@ class PltRwa(object):
             assert wave_index >= 0
             # 先把所有节点画出来
             for name, loc in self.layout.items():
-                if src is not None and (name.startswith(src) or name.startswith(dst)):
+                if src is not None and ((name == src) or (name == dst)):
                     shp = pt.Circle(xy=(loc[0]+bias, loc[1]+bias), radius=self.node_size/2, facecolor='red')
                 else:
                     shp = pt.Rectangle((loc[0], loc[1]), self.node_size, self.node_size, linewidth=0, edgecolor='r', facecolor='black')
@@ -106,6 +107,8 @@ class PltRwa(object):
         dataPIL = Image.open(buffer_)
         dataPIL = dataPIL.convert('L')
         dataPIL = dataPIL.resize(size=(self.img_width, self.img_height))
+        # # TODO 临时添加
+        # dataPIL.save(str(wave_index)+".png")
 
         data = np.asarray(dataPIL)
         data = data / 255
