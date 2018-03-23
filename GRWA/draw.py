@@ -12,7 +12,9 @@ from PIL import Image
 
 file_map = {
     "6node.md": "6node_layout.md",
-    "NSFNET.md": "NSFNET_layout.md"
+    "NSFNET.md": "NSFNET_layout.md",
+    "7node_10link.md": "7node_10link_layout.md",
+    "8node_11link.md": "8node_11link_layout.md"
 }
 
 
