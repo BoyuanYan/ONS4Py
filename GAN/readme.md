@@ -2,8 +2,10 @@
 
 > prepare for ECOC 2018
 
-#### code
+#### codes
 clone from https://github.com/goodfeli/adversarial, which is the first work about GAN.
+
+The translation of this paper is listed at http://blog.csdn.net/wspba/article/details/54577236
 
 
 #### Generative Adversarial Networks
