@@ -2,6 +2,7 @@ https://github.com/openai/gym/wiki/Table-of-environments
 
 https://github.com/openai/baselines-results/blob/master/acktr_ppo_acer_a2c_atari.ipynb
 
+[2018ECOC论文思路](2018ecoc.md)
 
 ## GRWA
 
@@ -124,6 +125,7 @@ return和reward，所以一次的误差不会带来什么影响。
 5. 必须将模型设置为eval模式，才能够正确进行模型效果评估。因为我都是用了BN。
 6. 在写网络拓扑的md的时候，不要加空格，否则会读到带空格的节点名称，导致无法匹配
 7. 在解析节点的时候，不要用.startswith方法，因为节点数大于10的拓扑，会出现多匹配的情况
+9. argparse在解析bool参数的时候，只要该参数在脚本中存在，则无论指定False或者True，都判定为True
 
 #### 8. 基础模型
 

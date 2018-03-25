@@ -15,7 +15,7 @@ class RwaNetwork(nx.Graph):
     """
     RWA network
     """
-    def __init__(self, filename: str, wave_num: int, append_route: bool=args.append_route, k: int=args.k, weight=None,
+    def __init__(self, filename: str, wave_num: int, append_route: bool=args.append_route.startswith("True"), k: int=args.k, weight=None,
                  file_prefix=file_prefix):
         """
 
@@ -29,8 +29,12 @@ class RwaNetwork(nx.Graph):
         self.wave_num = wave_num
         self.append_route = append_route
         if append_route:
+            print("open append-route option")
             self.k = k
             self.weight = weight
+        else:
+            self.k = 1
+            self.weight = None
         filepath = os.path.join(file_prefix, filename)
         if os.path.isfile(filepath):
             datas = np.loadtxt(filepath, delimiter='|', skiprows=2, dtype=str)
@@ -66,12 +70,13 @@ class RwaNetwork(nx.Graph):
                     rtn = np.concatenate((rtn, img), axis=0)
                 else:
                     rtn = np.array(img)
-            # TODO 默认将路由信息也放进去
-            if src is not None and dst is not None:
-                paths = self.k_shortest_paths(src, dst)
-                for nodes in paths:
-                    img = self.draw.draw(self, src, dst, nodes, -1)
-                    rtn = np.concatenate((rtn, img), axis=0)
+            # 判断是否将路由信息也放进去
+            if self.append_route:
+                if src is not None and dst is not None:
+                    paths = self.k_shortest_paths(src, dst)
+                    for nodes in paths:
+                        img = self.draw.draw(self, src, dst, nodes, -1)
+                        rtn = np.concatenate((rtn, img), axis=0)
 
             return rtn
         else:

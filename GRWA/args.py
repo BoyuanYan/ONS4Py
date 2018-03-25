@@ -19,7 +19,7 @@ parser.add_argument('--save-interval', type=int, default=100,
                     help='save interval, one save per n updates (default: 100)')
 parser.add_argument('--log-interval', type=int, default=10,
                     help='log interval, one log per n updates (default: 10)')
-parser.add_argument('--cuda', type=bool, default=False,
+parser.add_argument('--cuda', type=str, default="False",
                     help="是否使用GPU进行运算。如果为True，表示在集群上进行运算，有分布式操作。")
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model')
@@ -33,7 +33,7 @@ parser.add_argument('--line-width', type=float, default=1,
                     help="链路的粗细")
 parser.add_argument('--node-size', type=float, default=0.1,
                     help="节点的大小")
-parser.add_argument('--append-route', type=bool, default=True,
+parser.add_argument('--append-route', type=str, default="True",
                     help="是否将路由信息作为一个维度附加到图片中去")
 parser.add_argument('--file-prefix', type=str, default="resources",
                     help="resources目录的相对位置，默认是resources")
@@ -84,7 +84,7 @@ parser.add_argument('--value-loss-coef', type=float, default=0.5,
                     help='value loss coefficient (default: 0.5)')
 parser.add_argument('--gamma', type=float, default=0.99,
                     help='discount factor for rewards (default: 0.99)')
-parser.add_argument('--use-gae', type=bool, default=False,
+parser.add_argument('--use-gae', type=str, default="False",
                     help='https://github.com/ikostrikov/pytorch-a2c-ppo-acktr/issues/49')
 parser.add_argument('--expand-factor', type=int, default=2,
                     help="expandsimplenet的横向扩张系数，默认是2")

@@ -27,7 +27,7 @@ def main():
     num_cls = args.wave_num * args.k + 1  # 所有的路由和波长选择组合，加上啥都不选
     action_shape = 1  # action的维度，默认是1.
     num_updates = int(args.steps) // args.workers // args.num_steps  # 梯度一共需要更新的次数
-    if args.append_route:
+    if args.append_route.startswith("True"):
         channel_num = args.wave_num+args.k
     else:
         channel_num = args.wave_num
@@ -72,7 +72,7 @@ def main():
     else:
         raise NotImplementedError
 
-    if args.cuda:
+    if args.cuda.startswith("True"):
         # 如果要使用cuda进行计算
         actor_critic.cuda()
         # actor_critic = DistModule(actor_critic)
@@ -152,7 +152,7 @@ def main():
     episode_rewards = torch.zeros([args.workers, 1])
     final_rewards = torch.zeros([args.workers, 1])
 
-    if args.cuda:
+    if args.cuda.startswith("True"):
         current_obs = current_obs.cuda()
         rollout.cuda()
 
@@ -196,7 +196,7 @@ def main():
             final_rewards += (1 - masks) * episode_rewards
             episode_rewards *= masks
 
-            if args.cuda:
+            if args.cuda.startswith("True"):
                 masks = masks.cuda()
 
             # 给masks扩充2个维度，与current_obs相乘。则运行结束的游戏进程对应的obs值会变成0，图像上表示全黑，即游戏结束的画面。

@@ -16,7 +16,7 @@ def main():
     global actor_critic, directory, weight
     num_cls = args.wave_num * args.k + 1  # 所有的路由和波长选择组合，加上啥都不选
 
-    if args.append_route:
+    if args.append_route.startswith("True"):
         channel_num = args.wave_num+args.k
     else:
         channel_num = args.wave_num
